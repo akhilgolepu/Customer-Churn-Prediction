@@ -1,0 +1,5 @@
+Layer 1: Architecture (containers, data flow)
+Layer 2: UX logic (loading, empty, disabled, feedback)
+Layer 3: UI composition (sections, reuse, structure)
+Layer 4: Visual polish (animations, spacing, modern feel)
+Layer 5: Layout evolution (redesign)
