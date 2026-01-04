@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Custom palette */
+@theme {
+  --color-ink: #252323;     /* deep charcoal */
+  --color-steel: #70798c;   /* blue-gray */
+  --color-paper: #f5f1ed;   /* soft off-white */
+  --color-sand: #dad2bc;    /* warm beige */
+  --color-taupe: #a99985;   /* muted taupe */
+}
