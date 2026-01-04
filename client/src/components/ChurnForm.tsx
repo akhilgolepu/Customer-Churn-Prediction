@@ -38,7 +38,7 @@ export default function ChurnForm({ isPredicting, onSubmit, onChange }: ChurnFor
   const isValid  = 
     form.MonthlyCharges >= 0 &&
     form.tenure >= 0 &&
-    form.TotalCharges >= 0;
+    form.TotalCharges >= 0 &&
     Boolean(form.Contract) &&
     Boolean(form.InternetService) &&
     Boolean(form.PaymentMethod);
@@ -209,7 +209,7 @@ export default function ChurnForm({ isPredicting, onSubmit, onChange }: ChurnFor
           ${
             isPredicting
             ? "bg-sand cursor-not-allowed"
-            : "bg-steel hover:bg-int"
+            : "bg-steel hover:bg-ink"
           }`}
       >
         {isPredicting ? "Predicting, Please wait" : "Predict Churn"}

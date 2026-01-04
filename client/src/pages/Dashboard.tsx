@@ -3,21 +3,35 @@ import Section from "../components/ui/Section";
 import ChurnForm from "../components/ChurnForm";
 import PredictionCard from "../components/PredictionCard";
 import Charts from "../components/Charts";
+import { Prediction } from "../types/prediction";
+
+const CHURN_THRESHOLD = 0.5;
 
 export default function Dashboard() {
   const [formData, setFormData] = useState<FormState | null>(null);
-  
+
   const [predictions, setPredictions] = useState<Prediction[]>([]);
 
   const [isPredicting, setIsPredicting] = useState(false);
 
   const handlePredict = (newPrediction: Prediction) => {
     // Predicting starts
-    setPredictions(prev => [...prev, newPrediction]);
+    setIsPredicting(true);
 
     // API call
     setTimeout(() => {
-      setPredictions(prev => [...prev, newPrediction]);
+      const probability = Number(
+        (Math.random() * 0.8 + 0.1).toFixed(3)
+      );
+
+      const isChurn = probability >= CHURN_THRESHOLD;
+
+      const prediction: Prediction = {
+        probability,
+        isChurn,
+        timestamp: Date.now(),
+      };
+      setPredictions(prev => [...prev, prediction]);
       //Predicting ends here
       setIsPredicting(false);
     }, 1000);
@@ -25,7 +39,6 @@ export default function Dashboard() {
 
   const onFormChange = (newFormData) => {
     setFormData(newFormData);
-    setCurrentPrediction(null);
   }
 
   return (
@@ -70,7 +83,7 @@ export default function Dashboard() {
             {/* Charts & Insights - BOTTOM RIGHT */}
             <Section>
               <h2 className="text-lg font-semibold mb-4 text-ink text-center">Charts & Insights</h2>
-              <Charts />
+              <Charts predictions={predictions} />
             </Section>
           </div>
         </div>
