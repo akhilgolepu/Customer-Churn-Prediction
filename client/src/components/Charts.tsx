@@ -1,5 +1,17 @@
-import { Prediction } from "../types/prediction";
+import type { Prediction } from "../types/prediction";
 import KPI from "./ui/KPI";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Legend,
+} from "recharts";
 
 interface ChartsProps {
   predictions: Prediction[];
@@ -8,21 +20,34 @@ interface ChartsProps {
 export default function Charts({ predictions }: ChartsProps) {
   const totalPredictions = predictions.length;
   const churnCount = predictions.filter(p => p.isChurn).length;
-  const safeCount = totalPredictions - churnCount;
-  const CHURN_THRESHOLD = 0.5;
   const churnRate = totalPredictions > 0 ? (churnCount / totalPredictions) * 100 : 0;
-  const probabilities = predictions.map(p => p.probability);
   const avgProbability = 
       totalPredictions > 0
           ? predictions.reduce((sum, p) => sum + p.probability, 0) / totalPredictions
           : 0;
-  const buckets = [0, 0, 0, 0, 0];
+
+  //Line Chart data (probability trend)
+  const trendData = predictions.map((p, index) => ({
+    index: index + 1,
+    probability: Number((p.probability * 100).toFixed(2)),
+  }));
+
+  //Bar Chart data (Risk Distribution)
+  const riskBuckets = [
+    { label: "0-20%", count: 0 },
+    { label: "20-40%", count: 0 },
+    { label: "40-60%", count: 0 },
+    { label: "60-80%", count: 0 },
+    { label: "80-100%", count: 0 },
+  ];
+
+  
   predictions.forEach(p => {
-    if (p.probability < 0.2) buckets[0]++;
-    else if (p.probability < 0.4) buckets[1]++;
-    else if (p.probability < 0.6) buckets[2]++;
-    else if (p.probability < 0.8) buckets[3]++;
-    else buckets[4]++;
+    if (p.probability < 0.2) riskBuckets[0].count++;
+    else if (p.probability < 0.4) riskBuckets[1].count++;
+    else if (p.probability < 0.6) riskBuckets[2].count++;
+    else if (p.probability < 0.8) riskBuckets[3].count++;
+    else riskBuckets[4].count++;
   });
 
   const highRiskCustomers = 
@@ -50,45 +75,46 @@ export default function Charts({ predictions }: ChartsProps) {
       <div className="rounded-xl border border-sand p-4 mb-6">
         <p className="text-sm font-semibold text-steel mb-2">Churn Probability Trend</p>
 
-        <div className="flex items-end gap-2 h-32">
-          {probabilities.map((prob, i) => (
-            <div
-              key={i}
-              className="flex-1 rounded bg-steel transition-all duration-500 ease-out"
-              style={{ height: `${prob * 100}%` }}
-              title={`Prediction ${i + 1}: ${(prob*100).toFixed(1)}%`}
+        <ResponsiveContainer width="100%" height={250}>
+          <LineChart data={trendData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="index" />
+            <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
+            <Tooltip formatter={(v) => typeof v === 'number' ? `${v}%` : ''} />
+            <Legend />
+            <Line 
+              type="monotone" 
+              dataKey="probability" 
+              stroke="#4b5563" 
+              strokeWidth={2}
+              dot={{ r: 3 }} 
+              isAnimationActive  
             />
-          ))}
-        </div>
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Risk Distribution */}
       <div className="rounded-xl border border-sand p-4">
         <p className="text-sm font-semibold text-steel mb-2">Risk Distribution</p>
-        <div className="grid grid-cols-5 gap-2 h-24 items-end">
-          {buckets.map((count, i) => (
-            <div key={i} className="text-center">
-              <div
-                className="mx-auto w-8 rounded bg-taupe transition-all duration-500 ease-out"
-                style={{ height: `${count * 20} px` }}
-              />
-              <p className="text-xs text-steel mt-1">
-                {i * 20}-{i * 20 + 20}%
-              </p>
-            </div>))}
-        </div>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={riskBuckets}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="label" />
+            <YAxis allowDecimals={false} />
+            <Tooltip />
+            <Legend />
+            <Bar 
+              dataKey="count"
+              fill="#9CA3AF"
+              isAnimationActive  
+            />
+          </BarChart>
+        </ResponsiveContainer>
+
       </div>
 
-
-
-      <div className="text-sm text-steel">
-        Total predictions: {totalPredictions}
-      </div>
-      <div className="text-sm text-steel">
-        Churned customers: {churnCount}
-      </div>
-
-      <div className="mt-4 p-6">
+      <div className="mt-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-md">
           <div className="rounded-xl border border-sand p-4">
             <p className="text-sm text-steel">Top Drivers (demo)</p>

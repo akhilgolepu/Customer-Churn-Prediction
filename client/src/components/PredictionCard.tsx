@@ -23,7 +23,7 @@ export default function PredictionCard({
 
         {/* Prediction Result Card */}
         <div 
-          className={`rounded-xl border p-4 transition"
+          className={`rounded-xl border p-4 transition
               ${
                 isChurn === null
                   ? "border-sand bg-paper"

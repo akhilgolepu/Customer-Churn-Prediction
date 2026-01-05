@@ -4,19 +4,23 @@ import ChurnForm from "../components/ChurnForm";
 import PredictionCard from "../components/PredictionCard";
 import Charts from "../components/Charts";
 import { Prediction } from "../types/prediction";
+import { FormState } from "../types/formState";
 
 const CHURN_THRESHOLD = 0.5;
 
 export default function Dashboard() {
+  const [currentPrediction, setCurrentPrediction] = useState<Prediction | null>(null);
+
   const [formData, setFormData] = useState<FormState | null>(null);
 
   const [predictions, setPredictions] = useState<Prediction[]>([]);
 
   const [isPredicting, setIsPredicting] = useState(false);
 
-  const handlePredict = (newPrediction: Prediction) => {
+  const handlePredict = (data: FormState) => {
     // Predicting starts
     setIsPredicting(true);
+    console.log("Predicting with data:", data); // Optional: log the data to show it's being received
 
     // API call
     setTimeout(() => {
@@ -32,7 +36,7 @@ export default function Dashboard() {
         timestamp: Date.now(),
       };
       setPredictions(prev => [...prev, prediction]);
-      //Predicting ends here
+      setCurrentPrediction(prediction);
       setIsPredicting(false);
     }, 1000);
   };
@@ -52,13 +56,15 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <Section className="mx-6 my-4 p-4 rounded-md">
-        <h2 className="text-lg font-semibold mb-2 text-ink text-center">Project & Model Overview</h2>
-        <p className="text-steel text-center">Add your project and model description here.</p>
-      </Section>
+      <div className="px-6 py-6">
+        <Section className="rounded-md">
+          <h2 className="text-lg font-semibold mb-2 text-ink text-center">Project & Model Overview</h2>
+          <p className="text-steel text-center">Add your project and model description here.</p>
+        </Section>
+      </div>
 
       {/* ================= MAIN CONTENT ================= */}
-      <main className="flex-1 px-6 py-6 w-full">
+      <main className="flex-1 px-6 pb-6 w-full">
         {/* Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 rounded-md">
           {/* LEFT: Input Form */}
@@ -77,7 +83,11 @@ export default function Dashboard() {
             {/* Prediction Result - TOP RIGHT */}
             <Section>
               <h2 className="text-lg font-semibold mb-4 text-ink text-center">Prediction Result</h2>
-              <PredictionCard />
+              <PredictionCard 
+                probability={currentPrediction ? currentPrediction.probability : null}
+                isChurn={currentPrediction ? currentPrediction.isChurn : null}
+                isLoading={isPredicting}
+              />
             </Section>
 
             {/* Charts & Insights - BOTTOM RIGHT */}
