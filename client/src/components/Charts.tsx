@@ -41,6 +41,15 @@ export default function Charts({ predictions }: ChartsProps) {
     { label: "80-100%", count: 0 },
   ];
 
+  //
+  const topDrivers = [
+    { driver: "Contract: Month-to-month", impact: +0.18 },
+    { driver: "InternetService: Fiber optic", impact: +0.12 },
+    { driver: "PaymentMethod: Electronic check", impact: +0.09 },
+    { driver: "Tenure: < 12 months", impact: +0.15 },
+    { driver: "MonthlyCharges: > $70", impact: +0.10 },
+  ];
+
   
   predictions.forEach(p => {
     if (p.probability < 0.2) riskBuckets[0].count++;
@@ -111,8 +120,9 @@ export default function Charts({ predictions }: ChartsProps) {
             />
           </BarChart>
         </ResponsiveContainer>
-
       </div>
+
+      {/* Top Drivers - Demo Data */}
 
       <div className="mt-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-md">

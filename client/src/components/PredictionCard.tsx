@@ -12,7 +12,7 @@ export default function PredictionCard({
   return (
     <div className="rounded-md">
       <div className="grid grid-cols-2 gap-4 rounded-md">
-        <div className="rounded-xl border border-sand p-4">
+        <div className="rounded-xl border border-sand p-4 transition transform hover:-translate-y-0.5 hover:shadow-md">
           <p className="text-sm text-steel">Churn Probability</p>
           <p className="mt-1 text-2xl font-bold text-ink">
             {probability !== null 
@@ -23,7 +23,7 @@ export default function PredictionCard({
 
         {/* Prediction Result Card */}
         <div 
-          className={`rounded-xl border p-4 transition
+          className={`rounded-xl border p-4 transition transform hover:-translate-y-0.5 hover:shadow-md
               ${
                 isChurn === null
                   ? "border-sand bg-paper"
