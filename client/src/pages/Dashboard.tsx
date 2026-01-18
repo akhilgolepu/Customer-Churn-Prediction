@@ -104,7 +104,7 @@ export default function Dashboard() {
           </div>
 
           {/* Tech badges */}
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <div className="mt-4 flex flex-wrap justify-center gap-2 ">
             {[
               "React + TypeScript",
               "TailwindCSS",
@@ -115,7 +115,7 @@ export default function Dashboard() {
             ].map((tag) => (
               <span
                 key={tag}
-                className="px-3 py-1 rounded-full border border-sand text-xs text-steel bg-paper"
+                className="px-3 py-1 rounded-full border border-sand text-xs text-steel bg-paper transition transform hover:-translate-y-0.5 hover:shadow-md"
               >
                 {tag}
               </span>
