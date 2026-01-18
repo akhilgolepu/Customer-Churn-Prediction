@@ -7,7 +7,7 @@ FEATURE_LIST_PATH = os.path.join("G:\\23881A66E2\\Projects\\Customer_Churn_Predi
 CAT_COLS_PATH = os.path.join("G:\\23881A66E2\\Projects\\Customer_Churn_Predictor\\model\\artifacts\\cat_columns.json")
 
 def load_artifacts(feature_list_path: str = FEATURE_LIST_PATH, 
-                   cat_cols_path: str = CAT_COLS_PATH):
+                cat_cols_path: str = CAT_COLS_PATH):
     """Load feature list and categorical columns from JSON files.
     
 
@@ -31,8 +31,8 @@ def preprocess(raw_df: pd.DataFrame) -> pd.DataFrame:
     """Apply the same preprocessing steps as in training.
     
     - Create Engineered Features: TotalServices, IsFiberCustomer, IsMonthToMonth,
-      TechIssueRisk, PaymentRisk, HasPhoneAndInternet, TenureGroup
-      
+    TechIssueRisk, PaymentRisk, HasPhoneAndInternet, TenureGroup  
+
     Parameters
     ----------
     raw_df : pd.DataFrame
@@ -92,7 +92,7 @@ def prepare_for_model(df: pd.DataFrame, feature_list: List[str]) -> pd.DataFrame
     -------
     pd.DataFrame
         Dataframe ready for model input.
-     
+
     """
 
     df_proc = df.copy()
