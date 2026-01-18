@@ -1,6 +1,6 @@
 import pandas as pd
 
-def engineer_featrures(raw):
+def engineer_features(raw):
     """
     raw: PredictionRequest (Pydantic model)
     return: pd.DataFrame with engineered features

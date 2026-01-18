@@ -28,31 +28,35 @@ export default function PredictionCard({
                 isChurn === null
                   ? "border-sand bg-paper"
                   : isChurn
-                  ? "bg-red-300 border-red-50"
-                  : "bg-green-300 border-green-50"
+                  ? "bg-red-200 border-red-200 text-red-900"
+                  : "bg-green-200 border-green-200 text-green-900"
               }`}
           >
           
           <p className="text-sm text-steel">Status</p>
 
+          {/* Loading State */}
           {isLoading && (
-            <p className="mt-4 text-ink">Predicting, Please wait...</p>
+            <p className="mt-1 text-2xl font-bold text-ink">Prediction in process...</p>
           )}
-          
-          <p className="mt-1 text-2xl font-bold text-ink">
-            {isChurn === null
-              ? "No prediction yet"
-              : isChurn
-              ? "Likely to Churn"
-              : "Unlikely to Churn"
-            }
-          </p>
-          
-          {/* Helper text(only when null) */}
-          {isChurn === null && (
-            <p className="mt-4 text-sm text-taupe">
-              Fill the form and click <strong>Predict Churn</strong> to see results.  
-            </p>
+
+          {/* Idle / Result State */}
+          {!isLoading && (
+            <>
+              <p className="mt-1 text-2xl font-bold text-ink">
+                {isChurn === null
+                  ? "No prediction yet"
+                  : isChurn
+                  ? "Likely to Churn"
+                  : "Unlikely to Churn"}
+              </p>
+
+              {isChurn === null && (
+                <p className="mt-2 text-sm text-taupe">
+                  Fill the form and click <strong>"Predict"</strong> to see the result.
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

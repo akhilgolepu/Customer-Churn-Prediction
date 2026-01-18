@@ -8,7 +8,18 @@ class PredictionRequest(BaseModel):
     Contract: str
     InternetService: str
     PaymentMethod: str
+    PhoneService: str
+    MultipleLines: str
+    OnlineSecurity: str
+    OnlineBackup: str
+    DeviceProtection: str
+    TechSupport: str
+    StreamingTV: str
+    StreamingMovies: str
+    Partner: str
+    Dependents: str
+    PaperlessBilling: str
 
 class PredictionResponse(BaseModel):
-    proibability: float
+    probability: float
     isChurn: bool
