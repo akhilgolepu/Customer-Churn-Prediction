@@ -1,5 +1,9 @@
-export async function predictChurn(formData: any) {
-    const res = await fetch("http://127.0.0.1:8000/predict", {
+import type { FormState } from "../types/formState";
+
+const BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+
+export async function predictChurn(formData: FormState) {
+    const res = await fetch(`${BASE_URL}/predict`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -8,14 +12,15 @@ export async function predictChurn(formData: any) {
     });
 
     if (!res.ok) {
-        throw new Error("Prediction failed");
+        const detail = await res.text().catch(() => "Unknown error");
+        throw new Error(`Prediction failed (${res.status}): ${detail}`);
     }
 
     return await res.json();
 }
 
-export async function explainChurn(formData: any) {
-    const res = await fetch("http://127.0.0.1:8000/explain", {
+export async function explainChurn(formData: FormState) {
+    const res = await fetch(`${BASE_URL}/explain`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -24,7 +29,8 @@ export async function explainChurn(formData: any) {
     });
 
     if (!res.ok) {
-        throw new Error("Explan failed");
+        const detail = await res.text().catch(() => "Unknown error");
+        throw new Error(`Explanation failed (${res.status}): ${detail}`);
     }
 
     return await res.json();

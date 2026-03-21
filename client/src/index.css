@@ -1,10 +1,91 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
-/* Custom palette */
 @theme {
-  --color-ink: #252323;     /* deep charcoal */
-  --color-steel: #70798c;   /* blue-gray */
-  --color-paper: #f5f1ed;   /* soft off-white */
-  --color-sand: #dad2bc;    /* warm beige */
-  --color-taupe: #a99985;   /* muted taupe */
+  --color-base: #f6f8f7;
+  --color-surface: #ffffff;
+  --color-ink: #1f2a2a;
+  --color-muted: #5c6b6b;
+  --color-accent: #0f766e;
+  --color-accent-soft: #d9f2ef;
+  --color-copper: #c2410c;
+  --color-warning: #d97706;
+  --color-success: #15803d;
+  --color-danger: #b91c1c;
+  --color-border: #d7e1e0;
+}
+
+:root {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  color: #1f2a2a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(15, 118, 110, 0.14), transparent 35%),
+    radial-gradient(circle at 85% 20%, rgba(194, 65, 12, 0.1), transparent 28%),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.5),
+      rgba(255, 255, 255, 0.5) 2px,
+      rgba(246, 248, 247, 0.5) 2px,
+      rgba(246, 248, 247, 0.5) 10px
+    ),
+    #f6f8f7;
+  color: #1f2a2a;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Outfit", sans-serif;
+  letter-spacing: -0.015em;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.fade-stagger {
+  animation: fadeStagger 260ms ease-out both;
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(217, 242, 239, 0.3) 0%,
+    rgba(217, 242, 239, 0.8) 50%,
+    rgba(217, 242, 239, 0.3) 100%
+  );
+  background-size: 180% 100%;
+  animation: shimmer 1.3s linear infinite;
+}
+
+@keyframes fadeStagger {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -180% 0;
+  }
 }

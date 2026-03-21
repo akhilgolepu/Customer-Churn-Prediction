@@ -8,15 +8,14 @@ def engineer_features(raw):
 
 
     # Derived features
+    # TotalServices: matches training — counts only the 6 internet add-on services
     total_service = sum([
-        raw.PhoneService == "Yes",
-        raw.MultipleLines == "Yes",
         raw.OnlineSecurity == "Yes",
         raw.OnlineBackup == "Yes",
         raw.DeviceProtection == "Yes",
         raw.TechSupport == "Yes",
         raw.StreamingTV == "Yes",
-        raw.StreamingMovies == "Yes"
+        raw.StreamingMovies == "Yes",
     ])
 
     is_fiber_customer = 1 if raw.InternetService == "Fiber optic" else 0
@@ -27,10 +26,10 @@ def engineer_features(raw):
         raw.PhoneService == "Yes" and raw.InternetService != "No"
     )
 
+    # TechIssueRisk: matches training — has internet but no tech support
     tech_issue_risk = int(
-        raw.OnlineSecurity == "No"
+        raw.InternetService != "No"
         and raw.TechSupport == "No"
-        and raw.InternetService == "No"
     )
 
     if raw.tenure <= 6:
