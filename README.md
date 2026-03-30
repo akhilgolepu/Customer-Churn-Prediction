@@ -14,6 +14,29 @@ Production-style churn prediction application with:
 - ML runtime: CatBoost, pandas, numpy, SHAP
 - Data: Telco Customer Churn dataset
 
+## Dataset Expansion (Without Changing Current Model)
+
+You can broaden the project by tracking multiple churn datasets in parallel while keeping the current production model unchanged.
+
+- Dataset catalog: `data/dataset_catalog.json`
+- External dataset drop folder: `data/external/`
+- Inventory report script: `model/training/build_dataset_report.py`
+- Generated report: `data/dataset_report.md`
+
+### How to add more datasets
+
+1. Put new CSV files inside `data/external/`.
+2. Add entries to `data/dataset_catalog.json` with target column and positive label.
+3. Run:
+
+```bash
+python model/training/build_dataset_report.py
+```
+
+4. Review `data/dataset_report.md` for availability, row counts, and churn rate.
+
+This lets you expand into domains like banking or SaaS before deciding whether to train a challenger model.
+
 ## Current Capabilities
 
 - Predict churn probability with configurable threshold
@@ -154,6 +177,19 @@ pip install -r requirements.txt
 python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
+Database migration (PostgreSQL with Alembic):
+
+```bash
+cd backend
+alembic -c db/alembic.ini upgrade head
+```
+
+Alternative from repository root:
+
+```bash
+python -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --reload
+```
+
 ### 2) Frontend
 
 ```bash
@@ -173,9 +209,56 @@ npm run build
 
 ## API Endpoints
 
-- `POST /predict`
-- `POST /explain`
+- Auth:
+  - `POST /api/v1/auth/login`
+  - `POST /api/v1/auth/refresh`
+- Predictions:
+  - `POST /api/v1/predictions/predict`
+  - `POST /api/v1/predictions/explain`
+  - `POST /api/v1/predictions/recommend`
+  - `POST /api/v1/predictions/feedback`
+  - `POST /api/v1/predictions/outcome`
+- Monitoring:
+  - `GET /api/v1/system/monitoring`
+- Model lifecycle:
+  - `GET /api/v1/models`
+  - `POST /api/v1/models/register`
+  - `POST /api/v1/models/shadow`
+  - `POST /api/v1/models/promote`
+  - `POST /api/v1/models/rollback`
+- Jobs:
+  - `POST /api/v1/jobs/batch-score`
+  - `GET /api/v1/jobs/{job_id}/download`
 - OpenAPI docs: `http://127.0.0.1:8000/docs`
+
+Default demo users:
+
+- `admin` / `admin123`
+- `analyst` / `analyst123`
+- `viewer` / `viewer123`
+
+## Infrastructure Configuration
+
+The backend now supports a pluggable infrastructure stack:
+
+- `database_backend=sqlite|postgres`
+- `postgres_url=postgresql+psycopg://...`
+- `redis_enabled=true|false`
+- `redis_url=redis://...`
+- `object_storage_provider=none|local|s3|azure`
+
+Object storage settings:
+
+- `object_storage_bucket`
+- `object_storage_prefix`
+- `object_storage_local_path`
+- `azure_blob_account_url`
+- `azure_blob_credential`
+
+When `object_storage_provider` is enabled:
+
+- model loader can resolve `s3://` and `az://` model artifact URIs
+- batch CSV uploads and generated report CSVs can be persisted in object storage
 
 ## Screenshots
 

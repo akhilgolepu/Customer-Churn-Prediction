@@ -1,0 +1,37 @@
+{
+  "datasets": [
+    {
+      "id": "telco",
+      "name": "IBM Telco Customer Churn",
+      "path": "data/Telco-Customer-Churn.csv",
+      "target_column": "Churn",
+      "positive_label": "Yes",
+      "task": "binary_classification",
+      "domain": "telecom",
+      "status": "active",
+      "notes": "Primary dataset used for the current production model."
+    },
+    {
+      "id": "bank_churn",
+      "name": "Bank Customer Churn",
+      "path": "data/external/bank-customer-churn.csv",
+      "target_column": "Exited",
+      "positive_label": 1,
+      "task": "binary_classification",
+      "domain": "banking",
+      "status": "planned",
+      "notes": "Add file to data/external/ and update feature mapping before training a challenger model."
+    },
+    {
+      "id": "saas_subscription",
+      "name": "SaaS Subscription Churn",
+      "path": "data/external/saas-subscription-churn.csv",
+      "target_column": "is_churn",
+      "positive_label": 1,
+      "task": "binary_classification",
+      "domain": "saas",
+      "status": "planned",
+      "notes": "Use this to evaluate transferability outside telecom."
+    }
+  ]
+}

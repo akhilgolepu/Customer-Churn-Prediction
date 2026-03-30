@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormState } from "../types/formState";
 import Toggle from "./ui/Toggle";
 
@@ -8,6 +8,9 @@ interface ChurnFormProps {
   isPredicting: boolean;
   isSimulating: boolean;
   canSimulate: boolean;
+  readOnly?: boolean;
+  initialForm?: FormState | null;
+  onFormChange?: (data: FormState) => void;
 }
 
 interface SectionState {
@@ -75,7 +78,16 @@ function ChipGroup<T extends string | number>({
   );
 }
 
-export default function ChurnForm({ onSubmit, onSimulate, isPredicting, isSimulating, canSimulate }: ChurnFormProps) {
+export default function ChurnForm({
+  onSubmit,
+  onSimulate,
+  isPredicting,
+  isSimulating,
+  canSimulate,
+  readOnly = false,
+  initialForm,
+  onFormChange,
+}: ChurnFormProps) {
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [showAdvancedBilling, setShowAdvancedBilling] = useState(false);
   const [open, setOpen] = useState<SectionState>({
@@ -86,7 +98,15 @@ export default function ChurnForm({ onSubmit, onSimulate, isPredicting, isSimula
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
 
-  const disabled = isPredicting || isSimulating;
+  const disabled = isPredicting || isSimulating || readOnly;
+
+  useEffect(() => {
+    if (initialForm) setForm(initialForm);
+  }, [initialForm]);
+
+  useEffect(() => {
+    onFormChange?.(form);
+  }, [form, onFormChange]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -389,7 +409,7 @@ export default function ChurnForm({ onSubmit, onSimulate, isPredicting, isSimula
 
         <button
           type="button"
-          disabled={!canSimulate || isSimulating}
+          disabled={!canSimulate || isSimulating || readOnly}
           onClick={handleSimulate}
           className="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-4 py-3 font-semibold text-ink transition hover:border-accent disabled:opacity-50"
         >
@@ -417,7 +437,7 @@ export default function ChurnForm({ onSubmit, onSimulate, isPredicting, isSimula
           </button>
           <button
             type="button"
-            disabled={!canSimulate || isSimulating}
+            disabled={!canSimulate || isSimulating || readOnly}
             onClick={handleSimulate}
             className="flex-1 rounded-xl border border-border bg-surface px-3 py-3 text-sm font-semibold text-ink disabled:opacity-50"
           >
