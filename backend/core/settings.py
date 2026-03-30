@@ -1,4 +1,5 @@
 from functools import lru_cache
+import json
 from pathlib import Path
 from typing import Any
 
@@ -59,10 +60,26 @@ class Settings(BaseSettings):
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def parse_allowed_origins(cls, value: Any) -> list[str]:
+        # Handle missing or None values
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return ["http://localhost:5173"]
+        
         if isinstance(value, list):
             return value
+        
         if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
+            stripped = value.strip()
+            # Try to parse as JSON array
+            if stripped.startswith("["):
+                try:
+                    parsed = json.loads(stripped)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except json.JSONDecodeError:
+                    pass
+            # Fall back to comma-separated list
+            return [item.strip() for item in stripped.split(",") if item.strip()]
+        
         return ["http://localhost:5173"]
 
 
