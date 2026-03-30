@@ -131,6 +131,11 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
+    # Debug: Root endpoint to verify app is working
+    @app.get("/")
+    def root():
+        return {"status": "ok", "app": settings.app_name, "api_prefix": settings.api_prefix}
+
     app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(predictions_router, prefix=settings.api_prefix)
     app.include_router(jobs_router, prefix=settings.api_prefix)
