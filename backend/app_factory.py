@@ -136,6 +136,18 @@ def create_app() -> FastAPI:
     def root():
         return {"status": "ok", "app": settings.app_name, "api_prefix": settings.api_prefix}
 
+    # Debug: Print all registered routes
+    @app.get("/debug/routes")
+    def debug_routes():
+        routes = []
+        for route in app.routes:
+            if hasattr(route, "path"):
+                routes.append({
+                    "path": route.path,
+                    "methods": list(route.methods) if hasattr(route, "methods") else ["*"]
+                })
+        return {"routes": routes}
+
     app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(predictions_router, prefix=settings.api_prefix)
     app.include_router(jobs_router, prefix=settings.api_prefix)
