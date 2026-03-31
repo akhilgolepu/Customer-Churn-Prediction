@@ -14,6 +14,7 @@ from middleware.request_size_limit import request_size_limit_middleware
 from middleware.security_headers import security_headers_middleware
 from model_loader import MODEL_PATH
 from db.base import Base
+from db.bootstrap import ensure_postgres_baseline
 from db.session import PostgresSessionFactory
 from repositories.feedback_repository import FeedbackRepository
 from repositories.job_repository import JobRepository
@@ -21,8 +22,10 @@ from repositories.model_registry_repository import ModelRegistryRepository
 from repositories.monitoring_repository import MonitoringRepository
 from repositories.prediction_repository import PredictionRepository
 from repositories.postgres_feedback_repository import PostgresFeedbackRepository
+from repositories.postgres_job_repository import PostgresJobRepository
 from repositories.postgres_model_registry_repository import PostgresModelRegistryRepository
 from repositories.postgres_monitoring_repository import PostgresMonitoringRepository
+from repositories.postgres_prediction_repository import PostgresPredictionRepository
 from repositories.sqlite_store import SQLiteStore
 from routers.api_v1.auth import router as auth_router
 from routers.api_v1.jobs import router as jobs_router
@@ -64,19 +67,23 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title=settings.app_name)
 
-    prediction_repo = PredictionRepository()
-    job_repo = JobRepository()
+    effective_org_id = settings.default_org_id
     if settings.database_backend.lower() == "postgres":
         session_factory = PostgresSessionFactory(settings.postgres_url)
+        effective_org_id = ensure_postgres_baseline(session_factory, settings.default_org_id)
         Base.metadata.create_all(bind=session_factory.engine)
-        feedback_repo = PostgresFeedbackRepository(session_factory=session_factory, org_id=settings.default_org_id)
-        monitoring_repo = PostgresMonitoringRepository(session_factory=session_factory, org_id=settings.default_org_id)
+        feedback_repo = PostgresFeedbackRepository(session_factory=session_factory, org_id=effective_org_id)
+        monitoring_repo = PostgresMonitoringRepository(session_factory=session_factory, org_id=effective_org_id)
         model_registry_repo = PostgresModelRegistryRepository(
             session_factory=session_factory,
-            org_id=settings.default_org_id,
+            org_id=effective_org_id,
             default_artifact_path=str(MODEL_PATH),
         )
+        prediction_repo = PostgresPredictionRepository(session_factory=session_factory, org_id=effective_org_id)
+        job_repo = PostgresJobRepository(session_factory=session_factory, org_id=effective_org_id)
     else:
+        prediction_repo = PredictionRepository()
+        job_repo = JobRepository()
         store = SQLiteStore(settings.sqlite_path)
         feedback_repo = FeedbackRepository(store=store)
         monitoring_repo = MonitoringRepository(store=store)
@@ -130,23 +137,6 @@ def create_app() -> FastAPI:
     )
 
     register_exception_handlers(app)
-
-    # Debug: Root endpoint to verify app is working
-    @app.get("/")
-    def root():
-        return {"status": "ok", "app": settings.app_name, "api_prefix": settings.api_prefix}
-
-    # Debug: Print all registered routes
-    @app.get("/debug/routes")
-    def debug_routes():
-        routes = []
-        for route in app.routes:
-            if hasattr(route, "path"):
-                routes.append({
-                    "path": route.path,
-                    "methods": list(route.methods) if hasattr(route, "methods") else ["*"]
-                })
-        return {"routes": routes}
 
     app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(predictions_router, prefix=settings.api_prefix)

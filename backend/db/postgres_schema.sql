@@ -125,6 +125,22 @@ CREATE TABLE IF NOT EXISTS simulation_runs (
     deleted_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS job_runs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES organizations(id),
+    created_by UUID REFERENCES users(id),
+    job_type TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    idempotency_key TEXT UNIQUE,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    result JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
 -- High-volume event tables partitioned by month
 CREATE TABLE IF NOT EXISTS feedback_events (
     id UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -167,6 +183,9 @@ FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
 CREATE INDEX IF NOT EXISTS idx_predictions_org_time ON predictions (org_id, prediction_at DESC);
 CREATE INDEX IF NOT EXISTS idx_predictions_org_risk ON predictions (org_id, risk_score DESC);
 CREATE INDEX IF NOT EXISTS idx_sim_runs_org_time ON simulation_runs (org_id, run_at DESC);
+CREATE INDEX IF NOT EXISTS idx_job_runs_org_time ON job_runs (org_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_job_runs_org_status ON job_runs (org_id, status);
+CREATE INDEX IF NOT EXISTS idx_job_runs_org_type ON job_runs (org_id, job_type);
 CREATE INDEX IF NOT EXISTS idx_model_versions_org_stage ON model_versions (org_id, stage);
 CREATE INDEX IF NOT EXISTS idx_feedback_events_org_time ON feedback_events (org_id, event_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_org_time ON audit_logs (org_id, event_at DESC);
