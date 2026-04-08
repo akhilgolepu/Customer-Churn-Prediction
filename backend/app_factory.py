@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.exception_handlers import register_exception_handlers
 from core.logging_config import configure_logging
+from core.migrations import run_postgres_migrations
 from core.settings import get_settings
 from middleware.rate_limit import rate_limit_middleware
 from middleware.request_context import request_context_middleware
@@ -21,7 +22,9 @@ from repositories.job_repository import JobRepository
 from repositories.model_registry_repository import ModelRegistryRepository
 from repositories.monitoring_repository import MonitoringRepository
 from repositories.prediction_repository import PredictionRepository
+from repositories.audit_repository import AuditRepository
 from repositories.postgres_feedback_repository import PostgresFeedbackRepository
+from repositories.postgres_audit_repository import PostgresAuditRepository
 from repositories.postgres_job_repository import PostgresJobRepository
 from repositories.postgres_model_registry_repository import PostgresModelRegistryRepository
 from repositories.postgres_monitoring_repository import PostgresMonitoringRepository
@@ -34,6 +37,7 @@ from routers.api_v1.predictions import router as predictions_router
 from routers.api_v1.system import router as system_router
 from routers.legacy import router as legacy_router
 from services.auth_service import AuthService
+from services.audit_service import AuditService
 from services.feedback_service import FeedbackService
 from services.job_service import JobService, SchedulerService
 from services.model_registry_service import ModelRegistryService
@@ -53,6 +57,7 @@ class AppState:
     feedback_service: FeedbackService
     monitoring_service: MonitoringService
     model_registry_service: ModelRegistryService
+    audit_service: AuditService
     worker_task: asyncio.Task | None = None
     quality_task: asyncio.Task | None = None
     drift_task: asyncio.Task | None = None
@@ -69,9 +74,14 @@ def create_app() -> FastAPI:
 
     effective_org_id = settings.default_org_id
     if settings.database_backend.lower() == "postgres":
+        if settings.run_postgres_migrations_on_startup:
+            run_postgres_migrations(settings.postgres_url)
+
         session_factory = PostgresSessionFactory(settings.postgres_url)
         effective_org_id = ensure_postgres_baseline(session_factory, settings.default_org_id)
         Base.metadata.create_all(bind=session_factory.engine)
+        app.state.postgres_session_factory = session_factory
+
         feedback_repo = PostgresFeedbackRepository(session_factory=session_factory, org_id=effective_org_id)
         monitoring_repo = PostgresMonitoringRepository(session_factory=session_factory, org_id=effective_org_id)
         model_registry_repo = PostgresModelRegistryRepository(
@@ -81,6 +91,7 @@ def create_app() -> FastAPI:
         )
         prediction_repo = PostgresPredictionRepository(session_factory=session_factory, org_id=effective_org_id)
         job_repo = PostgresJobRepository(session_factory=session_factory, org_id=effective_org_id)
+        audit_repo = PostgresAuditRepository(session_factory=session_factory, org_id=effective_org_id)
     else:
         prediction_repo = PredictionRepository()
         job_repo = JobRepository()
@@ -88,19 +99,26 @@ def create_app() -> FastAPI:
         feedback_repo = FeedbackRepository(store=store)
         monitoring_repo = MonitoringRepository(store=store)
         model_registry_repo = ModelRegistryRepository(store=store, default_artifact_path=str(MODEL_PATH))
+        audit_repo = AuditRepository()
 
+    audit_service = AuditService(repo=audit_repo)
     auth_service = AuthService()
-    prediction_service = PredictionService(repo=prediction_repo)
+    prediction_service = PredictionService(repo=prediction_repo, audit_service=audit_service)
     recommendation_service = RecommendationService(prediction_service=prediction_service)
-    feedback_service = FeedbackService(repo=feedback_repo)
+    feedback_service = FeedbackService(repo=feedback_repo, audit_service=audit_service)
     monitoring_service = MonitoringService(
         prediction_repo=prediction_repo,
         feedback_repo=feedback_repo,
         monitoring_repo=monitoring_repo,
     )
-    model_registry_service = ModelRegistryService(repo=model_registry_repo)
+    model_registry_service = ModelRegistryService(repo=model_registry_repo, audit_service=audit_service)
     object_storage = build_object_storage()
-    job_service = JobService(repo=job_repo, prediction_service=prediction_service, object_storage=object_storage)
+    job_service = JobService(
+        repo=job_repo,
+        prediction_service=prediction_service,
+        object_storage=object_storage,
+        audit_service=audit_service,
+    )
     scheduler_service = SchedulerService(job_service=job_service)
 
     global app_state
@@ -113,6 +131,7 @@ def create_app() -> FastAPI:
         feedback_service=feedback_service,
         monitoring_service=monitoring_service,
         model_registry_service=model_registry_service,
+        audit_service=audit_service,
     )
 
     app.state.auth_service = auth_service
@@ -122,6 +141,7 @@ def create_app() -> FastAPI:
     app.state.feedback_service = feedback_service
     app.state.monitoring_service = monitoring_service
     app.state.model_registry_service = model_registry_service
+    app.state.audit_service = audit_service
 
     app.middleware("http")(request_context_middleware)
     app.middleware("http")(request_size_limit_middleware)

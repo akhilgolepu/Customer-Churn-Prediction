@@ -39,8 +39,9 @@ class CircuitBreaker:
 
 
 class PredictionService:
-    def __init__(self, repo: PredictionRepository) -> None:
+    def __init__(self, repo: PredictionRepository, audit_service=None) -> None:
         self._repo = repo
+        self._audit_service = audit_service
         settings = get_settings()
         self._breaker = CircuitBreaker(
             failure_threshold=settings.circuit_breaker_failure_threshold,
@@ -82,6 +83,18 @@ class PredictionService:
                 inputs=request.model_dump(),
             )
         )
+
+        if self._audit_service is not None:
+            self._audit_service.log(
+                action="prediction_created",
+                entity_type="prediction",
+                entity_id=prediction_id,
+                metadata={
+                    "probability": probability,
+                    "threshold": threshold,
+                    "is_churn": is_churn,
+                },
+            )
 
         result = {"predictionId": prediction_id, "probability": probability, "isChurn": is_churn}
         if shadow_probability is not None:

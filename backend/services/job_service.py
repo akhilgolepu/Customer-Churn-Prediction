@@ -20,10 +20,12 @@ class JobService:
         repo: JobRepository,
         prediction_service: PredictionService,
         object_storage: ObjectStorage | None = None,
+        audit_service=None,
     ) -> None:
         self._repo = repo
         self._prediction_service = prediction_service
         self._object_storage = object_storage
+        self._audit_service = audit_service
         self._queue: asyncio.Queue[str] = asyncio.Queue()
 
     async def enqueue_batch_scoring(self, csv_bytes: bytes, idempotency_key: str | None = None) -> JobItem:
@@ -51,6 +53,13 @@ class JobService:
             payload=payload,
         )
         self._repo.create(job)
+        if self._audit_service is not None:
+            self._audit_service.log(
+                action="job_enqueued",
+                entity_type="job",
+                entity_id=job.id,
+                metadata={"job_type": job.job_type},
+            )
         await self._queue.put(job.id)
         return job
 
@@ -70,6 +79,13 @@ class JobService:
             payload=payload or {},
         )
         self._repo.create(job)
+        if self._audit_service is not None:
+            self._audit_service.log(
+                action="job_enqueued",
+                entity_type="job",
+                entity_id=job.id,
+                metadata={"job_type": job.job_type},
+            )
         await self._queue.put(job.id)
         return job
 
@@ -121,6 +137,13 @@ class JobService:
                     job.error = None
                     job.updated_at = time.time()
                     self._repo.update(job)
+                    if self._audit_service is not None:
+                        self._audit_service.log(
+                            action="job_completed",
+                            entity_type="job",
+                            entity_id=job.id,
+                            metadata={"job_type": job.job_type, "attempts": job.attempts},
+                        )
                     success = True
                     break
                 except Exception as exc:
@@ -132,6 +155,13 @@ class JobService:
                 job.status = "failed"
                 job.updated_at = time.time()
                 self._repo.update(job)
+                if self._audit_service is not None:
+                    self._audit_service.log(
+                        action="job_failed",
+                        entity_type="job",
+                        entity_id=job.id,
+                        metadata={"job_type": job.job_type, "attempts": job.attempts, "error": job.error},
+                    )
 
             self._queue.task_done()
 

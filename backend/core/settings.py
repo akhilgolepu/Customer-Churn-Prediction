@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     database_backend: str = "sqlite"
     postgres_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/churn"
     default_org_id: str = "00000000-0000-0000-0000-000000000001"
+    run_postgres_migrations_on_startup: bool = True
 
     redis_enabled: bool = False
     redis_url: str = "redis://localhost:6379/0"

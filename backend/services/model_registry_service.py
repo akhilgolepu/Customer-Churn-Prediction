@@ -4,8 +4,9 @@ from repositories.model_registry_repository import ModelRegistryRepository
 
 
 class ModelRegistryService:
-    def __init__(self, repo: ModelRegistryRepository) -> None:
+    def __init__(self, repo: ModelRegistryRepository, audit_service=None) -> None:
         self._repo = repo
+        self._audit_service = audit_service
 
     def list_registry(self) -> dict:
         active_model_id, shadow_model_id = self._repo.state()
@@ -28,6 +29,13 @@ class ModelRegistryService:
 
     def register_candidate(self, version: str, metrics: dict[str, float], artifact_path: str) -> dict:
         item = self._repo.register_candidate(version=version, metrics=metrics, artifact_path=artifact_path)
+        if self._audit_service is not None:
+            self._audit_service.log(
+                action="model_registered",
+                entity_type="model_version",
+                entity_id=item.id,
+                metadata={"version": version, "artifact_path": artifact_path, "metrics": metrics},
+            )
         return {
             "id": item.id,
             "version": item.version,
@@ -45,6 +53,13 @@ class ModelRegistryService:
         switch_shadow_model(candidate.artifact_path)
         self._repo.set_shadow(candidate_model_id)
         active_model_id, shadow_model_id = self._repo.state()
+        if self._audit_service is not None:
+            self._audit_service.log(
+                action="model_shadow_enabled",
+                entity_type="model_version",
+                entity_id=candidate_model_id,
+                metadata={"active_model_id": active_model_id, "shadow_model_id": shadow_model_id},
+            )
         return {
             "message": "Shadow test enabled",
             "active_model_id": active_model_id,
@@ -61,6 +76,13 @@ class ModelRegistryService:
         active_model_id, shadow_model_id = self._repo.state()
         if shadow_model_id is None:
             switch_shadow_model(None)
+        if self._audit_service is not None:
+            self._audit_service.log(
+                action="model_promoted",
+                entity_type="model_version",
+                entity_id=candidate_model_id,
+                metadata={"active_model_id": active_model_id, "shadow_model_id": shadow_model_id},
+            )
         return {
             "message": "Candidate promoted to active model",
             "active_model_id": active_model_id,
@@ -77,6 +99,13 @@ class ModelRegistryService:
         switch_active_model(active_item.artifact_path)
         if shadow_model_id is None:
             switch_shadow_model(None)
+        if self._audit_service is not None:
+            self._audit_service.log(
+                action="model_rolled_back",
+                entity_type="model_version",
+                entity_id=active_model_id,
+                metadata={"target_model_id": target_model_id, "shadow_model_id": shadow_model_id},
+            )
         return {
             "message": "Rollback completed",
             "active_model_id": active_model_id,

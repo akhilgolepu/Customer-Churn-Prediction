@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import PlainTextResponse
+from sqlalchemy import text
 
+from core.cache import cache_client
 from core.dependencies import get_monitoring_service, require_roles
+from core.exceptions import AppError
 from core.metrics import metrics_store
+from core.settings import get_settings
 from schemas.common import MessageResponse
 from schemas.monitoring import MonitoringResponse
 
@@ -15,7 +19,29 @@ def health():
 
 
 @router.get("/ready", response_model=MessageResponse)
-def ready():
+def ready(request: Request):
+    settings = get_settings()
+
+    if settings.database_backend.lower() == "postgres":
+        session_factory = getattr(request.app.state, "postgres_session_factory", None)
+        if session_factory is None:
+            raise AppError(code="not_ready", message="Postgres session factory unavailable", status_code=503)
+
+        try:
+            with session_factory.session_scope() as session:
+                session.execute(text("SELECT 1"))
+        except Exception as exc:
+            raise AppError(code="not_ready", message=f"Database not ready: {exc}", status_code=503)
+
+    if settings.redis_enabled:
+        redis_client = cache_client.redis_client
+        if redis_client is None:
+            raise AppError(code="not_ready", message="Redis client unavailable", status_code=503)
+        try:
+            redis_client.ping()
+        except Exception as exc:
+            raise AppError(code="not_ready", message=f"Redis not ready: {exc}", status_code=503)
+
     return {"message": "ready"}
 
 
