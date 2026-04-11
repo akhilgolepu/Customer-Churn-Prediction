@@ -13,6 +13,10 @@ backend/data/*.db
 # Frontend build artifacts
 client/dist/
 client/node_modules/
+node_modules/
+
+# Notebook artifacts
+.ipynb_checkpoints/
 
 # OS/editor noise
 .DS_Store
