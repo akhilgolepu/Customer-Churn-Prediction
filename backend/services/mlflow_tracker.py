@@ -42,7 +42,7 @@ class MLflowExperimentTracker:
         """
         # Set tracking URI
         if tracking_uri is None:
-            tracking_uri = "file:backend/mlruns"
+            tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "file:backend/mlruns")
         
         self.tracking_uri = tracking_uri
         mlflow.set_tracking_uri(tracking_uri)

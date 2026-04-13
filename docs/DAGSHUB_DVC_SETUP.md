@@ -16,6 +16,8 @@ pip install dvc dagshub mlflow
 
 If you want DVC to talk to a remote storage backend, install the matching extra for your storage provider too.
 
+If you are using PowerShell on Windows, run the commands in a PowerShell session from the repo root.
+
 ## 2. Initialize a DVC remote
 
 Pick one remote type and set it as the default remote.
@@ -51,13 +53,29 @@ This regenerates `data/dataset_report.md` from the tracked dataset and catalog.
 
 For remote experiment tracking, set these environment variables before training or retraining:
 
-```bash
+### PowerShell
+
+```powershell
+$env:MLFLOW_TRACKING_URI = "https://dagshub.com/<owner>/<repo>.mlflow"
+$env:DAGSHUB_USERNAME = "<your-username>"
+$env:DAGSHUB_TOKEN = "<your-token>"
+```
+
+### Command Prompt
+
+```bat
 set MLFLOW_TRACKING_URI=https://dagshub.com/<owner>/<repo>.mlflow
 set DAGSHUB_USERNAME=<your-username>
 set DAGSHUB_TOKEN=<your-token>
 ```
 
-On macOS/Linux use `export` instead of `set`.
+### Bash
+
+```bash
+export MLFLOW_TRACKING_URI=https://dagshub.com/<owner>/<repo>.mlflow
+export DAGSHUB_USERNAME=<your-username>
+export DAGSHUB_TOKEN=<your-token>
+```
 
 ## 6. Recommended secret locations
 
@@ -72,3 +90,14 @@ Store these outside the repo:
 - Add a training stage for retraining once the model training entrypoint is split out of the notebook.
 - Add a remote model registry target if you want to store pipeline bundles outside the repo.
 - Wire the retraining service to log runs to the DAGsHub MLflow endpoint.
+
+## 8. Minimal end-to-end flow for this repository
+
+1. Create or open the DAGsHub repository for this project.
+2. Copy the DVC remote URL and the MLflow tracking URI from DAGsHub.
+3. In PowerShell, set the MLflow environment variables shown above.
+4. Run `dvc remote add -d dagshub <your-dvc-remote-url>`.
+5. Run `dvc push` to upload the dataset cache to the remote.
+6. Run `dvc repro dataset_report` to regenerate the dataset report.
+7. Train or retrain using `MLflowExperimentTracker(tracking_uri=...)` or the `MLFLOW_TRACKING_URI` env var.
+8. Log the run, model artifact, and validation report to DAGsHub-backed MLflow.
