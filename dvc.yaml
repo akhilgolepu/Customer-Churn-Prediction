@@ -1,0 +1,10 @@
+stages:
+  dataset_report:
+    cmd: python model/training/build_dataset_report.py
+    deps:
+      - model/training/build_dataset_report.py
+      - model/training/dataset_registry.py
+      - data/dataset_catalog.json
+      - data/Telco-Customer-Churn.csv
+    outs:
+      - data/dataset_report.md
