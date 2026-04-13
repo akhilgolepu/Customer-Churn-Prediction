@@ -3,7 +3,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import text
 
 from core.cache import cache_client
-from core.dependencies import get_monitoring_service, require_roles
+from core.dependencies import get_canary_service, get_monitoring_service, require_roles
 from core.exceptions import AppError
 from core.metrics import metrics_store
 from core.settings import get_settings
@@ -68,3 +68,11 @@ def monitoring(
     _=Depends(require_roles("admin", "analyst")),
 ):
     return monitoring_service.snapshot()
+
+
+@router.get("/canary")
+def canary_status(
+    canary_service=Depends(get_canary_service),
+    _=Depends(require_roles("admin", "analyst", "viewer")),
+):
+    return canary_service.snapshot()

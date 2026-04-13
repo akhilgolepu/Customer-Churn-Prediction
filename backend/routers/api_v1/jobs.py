@@ -45,7 +45,13 @@ async def retrain(
     _=Depends(require_roles("admin")),
 ):
     job = await job_service.enqueue_simple_job(
-        "retraining", payload={"reason": payload.reason}, idempotency_key=idempotency_key
+        "retraining",
+        payload={
+            "reason": payload.reason,
+            "auto_promote": payload.auto_promote,
+            "max_rows": payload.max_rows,
+        },
+        idempotency_key=idempotency_key,
     )
     return {"job": to_job_record(job)}
 

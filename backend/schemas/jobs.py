@@ -31,6 +31,8 @@ class JobsListResponse(BaseModel):
 
 class RetrainRequest(BaseModel):
     reason: str = Field(default="manual")
+    auto_promote: bool = Field(default=False)
+    max_rows: int | None = Field(default=None, ge=100)
 
 
 class ReportRequest(BaseModel):

@@ -20,11 +20,13 @@ class JobService:
         repo: JobRepository,
         prediction_service: PredictionService,
         object_storage: ObjectStorage | None = None,
+        retraining_service=None,
         audit_service=None,
     ) -> None:
         self._repo = repo
         self._prediction_service = prediction_service
         self._object_storage = object_storage
+        self._retraining_service = retraining_service
         self._audit_service = audit_service
         self._queue: asyncio.Queue[str] = asyncio.Queue()
 
@@ -123,8 +125,15 @@ class JobService:
                     if job.job_type == "batch_scoring":
                         result = await self._run_batch_scoring(job)
                     elif job.job_type == "retraining":
-                        await asyncio.sleep(1.2)
-                        result = {"status": "retraining_triggered", "reason": job.payload.get("reason", "manual")}
+                        if self._retraining_service is None:
+                            await asyncio.sleep(1.2)
+                            result = {
+                                "status": "retraining_triggered",
+                                "reason": job.payload.get("reason", "manual"),
+                                "note": "retraining service is not configured",
+                            }
+                        else:
+                            result = await self._retraining_service.run(job.payload)
                     elif job.job_type in {"drift_report", "quality_check", "report_generation"}:
                         await asyncio.sleep(0.8)
                         result = {"status": "generated", "job_type": job.job_type}
@@ -232,8 +241,10 @@ class JobService:
 
 
 class SchedulerService:
-    def __init__(self, job_service: JobService) -> None:
+    def __init__(self, job_service: JobService, monitoring_service=None) -> None:
         self._job_service = job_service
+        self._monitoring_service = monitoring_service
+        self._last_retrain_enqueue_ts: float = 0.0
 
     async def quality_check_loop(self) -> None:
         settings = get_settings()
@@ -246,3 +257,38 @@ class SchedulerService:
         while True:
             await asyncio.sleep(settings.schedule_drift_report_seconds)
             await self._job_service.enqueue_simple_job("drift_report", payload={"source": "scheduler"})
+
+    async def retraining_loop(self) -> None:
+        settings = get_settings()
+        while True:
+            await asyncio.sleep(settings.schedule_retrain_poll_seconds)
+
+            if not settings.schedule_retraining_enabled:
+                continue
+
+            now = time.time()
+            cooldown_elapsed = (now - self._last_retrain_enqueue_ts) >= settings.schedule_retrain_cooldown_seconds
+            if not cooldown_elapsed:
+                continue
+
+            reason = None
+            if self._monitoring_service is not None:
+                snapshot = self._monitoring_service.snapshot()
+                alerts = snapshot.get("alerts", []) if isinstance(snapshot, dict) else []
+                if alerts:
+                    reason = "drift_alert"
+
+            if reason is None and settings.schedule_retrain_force_interval_seconds > 0:
+                if (now - self._last_retrain_enqueue_ts) >= settings.schedule_retrain_force_interval_seconds:
+                    reason = "scheduled_interval"
+
+            if reason is None:
+                continue
+
+            payload = {
+                "reason": reason,
+                "source": "scheduler",
+                "auto_promote": False,
+            }
+            await self._job_service.enqueue_simple_job("retraining", payload=payload)
+            self._last_retrain_enqueue_ts = now

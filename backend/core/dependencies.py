@@ -35,6 +35,10 @@ def get_model_registry_service(request: Request):
     return request.app.state.model_registry_service
 
 
+def get_canary_service(request: Request):
+    return request.app.state.canary_service
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     auth_service=Depends(get_auth_service),

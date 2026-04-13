@@ -41,7 +41,9 @@ class PredictionResponse(BaseModel):
     predictionId: str
     probability: float
     isChurn: bool
+    activeProbability: float | None = None
     shadowProbability: float | None = None
+    variant: str | None = None
 
 
 class Driver(BaseModel):

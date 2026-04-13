@@ -38,12 +38,14 @@ from routers.api_v1.system import router as system_router
 from routers.legacy import router as legacy_router
 from services.auth_service import AuthService
 from services.audit_service import AuditService
+from services.canary_service import CanaryRolloutService
 from services.feedback_service import FeedbackService
 from services.job_service import JobService, SchedulerService
 from services.model_registry_service import ModelRegistryService
 from services.monitoring_service import MonitoringService
 from services.prediction_service import PredictionService
 from services.recommendation_service import RecommendationService
+from services.retraining_service import RetrainingOrchestrator
 from storage.factory import build_object_storage
 
 
@@ -57,10 +59,12 @@ class AppState:
     feedback_service: FeedbackService
     monitoring_service: MonitoringService
     model_registry_service: ModelRegistryService
+    canary_service: CanaryRolloutService
     audit_service: AuditService
     worker_task: asyncio.Task | None = None
     quality_task: asyncio.Task | None = None
     drift_task: asyncio.Task | None = None
+    retrain_task: asyncio.Task | None = None
 
 
 app_state: AppState
@@ -103,8 +107,6 @@ def create_app() -> FastAPI:
 
     audit_service = AuditService(repo=audit_repo)
     auth_service = AuthService()
-    prediction_service = PredictionService(repo=prediction_repo, audit_service=audit_service)
-    recommendation_service = RecommendationService(prediction_service=prediction_service)
     feedback_service = FeedbackService(repo=feedback_repo, audit_service=audit_service)
     monitoring_service = MonitoringService(
         prediction_repo=prediction_repo,
@@ -112,14 +114,30 @@ def create_app() -> FastAPI:
         monitoring_repo=monitoring_repo,
     )
     model_registry_service = ModelRegistryService(repo=model_registry_repo, audit_service=audit_service)
+    canary_service = CanaryRolloutService(
+        enabled=settings.canary_enabled,
+        traffic_percent=settings.canary_traffic_percent,
+        min_samples=settings.canary_min_samples,
+        max_disagreement_rate=settings.canary_max_disagreement_rate,
+        rollback_cooldown_seconds=settings.canary_rollback_cooldown_seconds,
+    )
+    prediction_service = PredictionService(
+        repo=prediction_repo,
+        audit_service=audit_service,
+        canary_service=canary_service,
+        model_registry_service=model_registry_service,
+    )
+    recommendation_service = RecommendationService(prediction_service=prediction_service)
+    retraining_service = RetrainingOrchestrator(model_registry_service=model_registry_service)
     object_storage = build_object_storage()
     job_service = JobService(
         repo=job_repo,
         prediction_service=prediction_service,
         object_storage=object_storage,
+        retraining_service=retraining_service,
         audit_service=audit_service,
     )
-    scheduler_service = SchedulerService(job_service=job_service)
+    scheduler_service = SchedulerService(job_service=job_service, monitoring_service=monitoring_service)
 
     global app_state
     app_state = AppState(
@@ -131,6 +149,7 @@ def create_app() -> FastAPI:
         feedback_service=feedback_service,
         monitoring_service=monitoring_service,
         model_registry_service=model_registry_service,
+        canary_service=canary_service,
         audit_service=audit_service,
     )
 
@@ -141,6 +160,7 @@ def create_app() -> FastAPI:
     app.state.feedback_service = feedback_service
     app.state.monitoring_service = monitoring_service
     app.state.model_registry_service = model_registry_service
+    app.state.canary_service = canary_service
     app.state.audit_service = audit_service
 
     app.middleware("http")(request_context_middleware)
@@ -152,8 +172,8 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=settings.strict_cors,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     register_exception_handlers(app)
@@ -171,10 +191,11 @@ def create_app() -> FastAPI:
         app_state.worker_task = asyncio.create_task(job_service.worker_loop())
         app_state.quality_task = asyncio.create_task(scheduler_service.quality_check_loop())
         app_state.drift_task = asyncio.create_task(scheduler_service.drift_report_loop())
+        app_state.retrain_task = asyncio.create_task(scheduler_service.retraining_loop())
 
     @app.on_event("shutdown")
     async def shutdown_event() -> None:
-        for task in [app_state.worker_task, app_state.quality_task, app_state.drift_task]:
+        for task in [app_state.worker_task, app_state.quality_task, app_state.drift_task, app_state.retrain_task]:
             if task:
                 task.cancel()
 

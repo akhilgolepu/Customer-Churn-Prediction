@@ -39,9 +39,11 @@ class CircuitBreaker:
 
 
 class PredictionService:
-    def __init__(self, repo: PredictionRepository, audit_service=None) -> None:
+    def __init__(self, repo: PredictionRepository, audit_service=None, canary_service=None, model_registry_service=None) -> None:
         self._repo = repo
         self._audit_service = audit_service
+        self._canary_service = canary_service
+        self._model_registry_service = model_registry_service
         settings = get_settings()
         self._breaker = CircuitBreaker(
             failure_threshold=settings.circuit_breaker_failure_threshold,
@@ -68,10 +70,36 @@ class PredictionService:
 
     async def predict(self, request: PredictionRequest, threshold: float) -> dict:
         df = engineer_features(request)
-        probability = float(await self._run_with_resilience(lambda: predict_proba(df)))
+        active_probability = float(await self._run_with_resilience(lambda: predict_proba(df)))
         shadow_probability = await self._run_with_resilience(lambda: predict_shadow_proba(df))
-        is_churn = probability >= threshold
         prediction_id = str(uuid.uuid4())
+
+        variant = "active"
+        rollback_triggered = False
+        if self._canary_service is not None:
+            canary_eval = self._canary_service.record_prediction(
+                prediction_id=prediction_id,
+                active_probability=active_probability,
+                shadow_probability=shadow_probability,
+                threshold=threshold,
+            )
+            variant = str(canary_eval.get("variant", "active"))
+            rollback_triggered = bool(canary_eval.get("rollback_triggered", False))
+
+        probability = active_probability
+        if variant == "shadow" and shadow_probability is not None:
+            probability = float(shadow_probability)
+
+        if rollback_triggered and self._model_registry_service is not None:
+            try:
+                self._model_registry_service.rollback()
+                if self._canary_service is not None:
+                    self._canary_service.disable()
+            except Exception:
+                # Rollback attempts should not fail prediction path.
+                pass
+
+        is_churn = probability >= threshold
 
         self._repo.add(
             PredictionHistoryItem(
@@ -91,14 +119,19 @@ class PredictionService:
                 entity_id=prediction_id,
                 metadata={
                     "probability": probability,
+                    "active_probability": active_probability,
+                    "shadow_probability": shadow_probability,
+                    "variant": variant,
                     "threshold": threshold,
                     "is_churn": is_churn,
                 },
             )
 
         result = {"predictionId": prediction_id, "probability": probability, "isChurn": is_churn}
+        result["activeProbability"] = active_probability
         if shadow_probability is not None:
             result["shadowProbability"] = float(shadow_probability)
+            result["variant"] = variant
         return result
 
     async def explain(self, request: PredictionRequest) -> dict:

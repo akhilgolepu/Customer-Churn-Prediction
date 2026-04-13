@@ -57,11 +57,21 @@ class Settings(BaseSettings):
     batch_worker_retry_count: int = 3
     schedule_quality_check_seconds: int = 900
     schedule_drift_report_seconds: int = 1800
+    schedule_retraining_enabled: bool = True
+    schedule_retrain_poll_seconds: int = 1800
+    schedule_retrain_force_interval_seconds: int = 86400
+    schedule_retrain_cooldown_seconds: int = 21600
 
     input_drift_alert_threshold: float = 0.20
     prediction_drift_alert_threshold: float = 0.15
     min_outcomes_for_performance_tracking: int = 20
     minimum_recall_threshold: float = 0.55
+
+    canary_enabled: bool = False
+    canary_traffic_percent: int = 10
+    canary_min_samples: int = 100
+    canary_max_disagreement_rate: float = 0.35
+    canary_rollback_cooldown_seconds: int = 600
     sqlite_path: str = str((Path(__file__).resolve().parents[1] / "data" / "app.db"))
 
     database_backend: str = "sqlite"
