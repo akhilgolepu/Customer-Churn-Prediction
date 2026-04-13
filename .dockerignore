@@ -1,0 +1,13 @@
+.git
+.gitignore
+.vscode
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.venv
+**/node_modules
+client/dist
+model/training
+*.ipynb

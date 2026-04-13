@@ -1,0 +1,11 @@
+backend/
+model/
+data/
+.github/
+docs/
+.gitignore
+README.md
+requirements.txt
+docker-compose.yml
+Dockerfile
+.dockerignore

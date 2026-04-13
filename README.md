@@ -37,6 +37,35 @@ python model/training/build_dataset_report.py
 
 This lets you expand into domains like banking or SaaS before deciding whether to train a challenger model.
 
+## Reproducible Pipeline Bundle (Preprocessing + Model)
+
+For strict reproducibility, package preprocessing artifacts and model version together as one immutable bundle.
+
+Build a pipeline bundle:
+
+```bash
+python model/preprocessing/pipeline_bundle.py --version v2
+```
+
+This creates a zip in `model/artifacts/bundles/` containing:
+
+- `model/model.cbm`
+- `preprocessing/feature_list.json`
+- `preprocessing/cat_columns.json`
+- `preprocessing/preprocessing_spec.json`
+- `manifest.json` (artifact format + SHA256 checksums)
+
+Register the bundle as a candidate model artifact:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/models/register" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d "{\"version\":\"v2\",\"metrics\":{\"roc_auc\":0.87},\"artifact_path\":\"model/artifacts/bundles/churn_pipeline_v2_YYYYMMDDTHHMMSSZ.zip\"}"
+```
+
+When promoted, the backend accepts the bundle URI directly and verifies manifest checksums before loading the model.
+
 ## Current Capabilities
 
 - Predict churn probability with configurable threshold
@@ -207,6 +236,23 @@ cd client
 npm run build
 ```
 
+### 4) Run with Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Services:
+
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+
+To stop:
+
+```bash
+docker compose down
+```
+
 ## API Endpoints
 
 - Auth:
@@ -220,6 +266,7 @@ npm run build
   - `POST /api/v1/predictions/outcome`
 - Monitoring:
   - `GET /api/v1/system/monitoring`
+  - `GET /api/v1/system/canary`
 - Model lifecycle:
   - `GET /api/v1/models`
   - `POST /api/v1/models/register`
@@ -259,6 +306,98 @@ When `object_storage_provider` is enabled:
 
 - model loader can resolve `s3://` and `az://` model artifact URIs
 - batch CSV uploads and generated report CSVs can be persisted in object storage
+
+## Deploy (Vercel + Render)
+
+Recommended split:
+
+- Frontend: Vercel (root directory: `client`)
+- Backend: Render Web Service (root directory: `backend`)
+
+### Backend on Render
+
+Build command:
+
+```bash
+pip install -r requirements.txt
+```
+
+Start command:
+
+```bash
+uvicorn app:app --host 0.0.0.0 --port $PORT
+```
+
+Set these Render environment variables at minimum:
+
+- `SECRET_KEY`
+- `ALLOWED_ORIGINS` (comma-separated or JSON list)
+- `DATABASE_BACKEND` (`sqlite` or `postgres`)
+- `POSTGRES_URL` (if using Postgres)
+- `REDIS_ENABLED`, `REDIS_URL` (if using Redis)
+- `OBJECT_STORAGE_PROVIDER` and related storage vars (if using object storage)
+
+Example `ALLOWED_ORIGINS`:
+
+```text
+https://your-frontend.vercel.app
+```
+
+or
+
+```text
+["https://your-frontend.vercel.app"]
+```
+
+Health endpoints for Render checks:
+
+- `/api/v1/system/health`
+- `/api/v1/system/ready`
+
+### Frontend on Vercel
+
+Set project root to `client` and add:
+
+- `VITE_API_URL=https://your-backend.onrender.com`
+
+The frontend calls API routes via `${VITE_API_URL}/api/v1/...`.
+
+If `VITE_API_URL` is not set in production, the app falls back to same-origin (`""`).
+
+## Continuous Deployment (Approved Model/Service)
+
+The repository includes a production CD workflow:
+
+- Workflow file: `.github/workflows/cd.yml`
+- Trigger 1: after CI succeeds on `main`
+- Trigger 2: manual run (`workflow_dispatch`) with optional model promotion
+
+Deployment is gated by a GitHub environment named `production`.
+Set required reviewers in the `production` environment to enforce approval before deployment proceeds.
+
+CD behavior:
+
+- Waits for production approval gate.
+- Optionally promotes an approved candidate model (`/api/v1/models/promote`) when `promote_candidate_model_id` is provided in manual runs.
+- Triggers backend deployment via Render Deploy Hook.
+- Verifies backend readiness (`/api/v1/system/ready`) when a healthcheck URL secret is configured.
+- Triggers frontend deployment via Vercel Deploy Hook.
+
+Required GitHub secrets:
+
+- `RENDER_DEPLOY_HOOK_URL`
+- `VERCEL_DEPLOY_HOOK_URL`
+- `BACKEND_HEALTHCHECK_URL` (optional but recommended, for example `https://your-backend.onrender.com/api/v1/system/ready`)
+
+Required only for model auto-promotion during manual CD runs:
+
+- `BACKEND_API_URL` (for example `https://your-backend.onrender.com`)
+- `BACKEND_ADMIN_TOKEN` (admin JWT used for `/api/v1/models/promote`)
+
+Manual CD run examples:
+
+- Deploy service only: run CD workflow with defaults.
+- Deploy and promote approved model: provide `promote_candidate_model_id` in the workflow input.
 
 ## Screenshots
 

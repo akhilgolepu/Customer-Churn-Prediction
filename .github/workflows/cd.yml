@@ -1,0 +1,139 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_backend:
+        description: "Deploy backend service"
+        required: false
+        default: true
+        type: boolean
+      deploy_frontend:
+        description: "Deploy frontend service"
+        required: false
+        default: true
+        type: boolean
+      promote_candidate_model_id:
+        description: "Optional candidate model id to promote before deployment"
+        required: false
+        type: string
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  release_gate:
+    name: Production Approval Gate
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    environment:
+      name: production
+    outputs:
+      deploy_backend: ${{ steps.plan.outputs.deploy_backend }}
+      deploy_frontend: ${{ steps.plan.outputs.deploy_frontend }}
+      promote_candidate_model_id: ${{ steps.plan.outputs.promote_candidate_model_id }}
+    steps:
+      - name: Resolve deployment plan
+        id: plan
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "deploy_backend=${{ inputs.deploy_backend }}" >> "$GITHUB_OUTPUT"
+            echo "deploy_frontend=${{ inputs.deploy_frontend }}" >> "$GITHUB_OUTPUT"
+            echo "promote_candidate_model_id=${{ inputs.promote_candidate_model_id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_backend=true" >> "$GITHUB_OUTPUT"
+            echo "deploy_frontend=true" >> "$GITHUB_OUTPUT"
+            echo "promote_candidate_model_id=" >> "$GITHUB_OUTPUT"
+          fi
+
+  promote_model:
+    name: Promote Approved Model
+    runs-on: ubuntu-latest
+    needs: release_gate
+    if: needs.release_gate.outputs.promote_candidate_model_id != ''
+    steps:
+      - name: Promote model in registry
+        env:
+          BACKEND_API_URL: ${{ secrets.BACKEND_API_URL }}
+          BACKEND_ADMIN_TOKEN: ${{ secrets.BACKEND_ADMIN_TOKEN }}
+          CANDIDATE_MODEL_ID: ${{ needs.release_gate.outputs.promote_candidate_model_id }}
+        run: |
+          if [ -z "$BACKEND_API_URL" ]; then
+            echo "Missing secret: BACKEND_API_URL"
+            exit 1
+          fi
+          if [ -z "$BACKEND_ADMIN_TOKEN" ]; then
+            echo "Missing secret: BACKEND_ADMIN_TOKEN"
+            exit 1
+          fi
+          if [ -z "$CANDIDATE_MODEL_ID" ]; then
+            echo "No candidate model id provided"
+            exit 1
+          fi
+
+          curl -fsS -X POST "$BACKEND_API_URL/api/v1/models/promote" \
+            -H "Authorization: Bearer $BACKEND_ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"candidate_model_id\":\"$CANDIDATE_MODEL_ID\"}"
+
+  deploy_backend:
+    name: Deploy Backend (Render)
+    runs-on: ubuntu-latest
+    needs: [release_gate, promote_model]
+    if: >-
+      needs.release_gate.outputs.deploy_backend == 'true' &&
+      (needs.promote_model.result == 'success' || needs.promote_model.result == 'skipped')
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Missing secret: RENDER_DEPLOY_HOOK_URL"
+            exit 1
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: Wait for backend readiness
+        env:
+          BACKEND_HEALTHCHECK_URL: ${{ secrets.BACKEND_HEALTHCHECK_URL }}
+        run: |
+          if [ -z "$BACKEND_HEALTHCHECK_URL" ]; then
+            echo "BACKEND_HEALTHCHECK_URL not set; skipping readiness check."
+            exit 0
+          fi
+
+          for i in {1..20}; do
+            if curl -fsS "$BACKEND_HEALTHCHECK_URL" > /dev/null; then
+              echo "Backend is ready."
+              exit 0
+            fi
+            echo "Waiting for backend readiness ($i/20)..."
+            sleep 15
+          done
+
+          echo "Backend did not become ready in time."
+          exit 1
+
+  deploy_frontend:
+    name: Deploy Frontend (Vercel)
+    runs-on: ubuntu-latest
+    needs: [release_gate, deploy_backend]
+    if: needs.release_gate.outputs.deploy_frontend == 'true'
+    steps:
+      - name: Trigger Vercel deploy
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK_URL" ]; then
+            echo "Missing secret: VERCEL_DEPLOY_HOOK_URL"
+            exit 1
+          fi
+          curl -fsS -X POST "$VERCEL_DEPLOY_HOOK_URL"

@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: churn-backend
+    environment:
+      DATABASE_BACKEND: sqlite
+      SQLITE_PATH: /app/backend/data/app.db
+      ALLOWED_ORIGINS: '["http://localhost:5173"]'
+      OBJECT_STORAGE_PROVIDER: none
+      SCHEDULE_RETRAINING_ENABLED: "true"
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./model/artifacts:/app/model/artifacts
+      - ./data:/app/data:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: churn-client
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+networks:
+  default:
+    name: churn-network

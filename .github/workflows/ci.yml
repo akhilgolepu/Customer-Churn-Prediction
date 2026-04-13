@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "**"
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install ruff
+
+      - name: Lint backend code
+        run: |
+          ruff check backend model/training
+
+      - name: Validate Python import/syntax pipeline
+        run: |
+          python -m compileall backend model/training
+
+      - name: Run backend regression tests
+        run: |
+          pip install pytest httpx
+          pytest -q backend/tests --maxfail=1 --disable-warnings
+
+      - name: Backend smoke test (SQLite app factory)
+        env:
+          DATABASE_BACKEND: sqlite
+        run: |
+          cd backend
+          python -c "from app_factory import create_app; app=create_app(); assert len(app.routes) > 0; print('backend_app_ok', len(app.routes))"
+
+      - name: Data pipeline validation (dataset registry report)
+        run: |
+          python model/training/build_dataset_report.py
+
+      - name: Upload dataset report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataset-report
+          path: data/dataset_report.md
+
+  frontend:
+    name: Frontend Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd client
+          npm ci
+
+      - name: Lint frontend code
+        run: |
+          cd client
+          npm run lint
+
+      - name: Build frontend
+        run: |
+          cd client
+          npm run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-dist
+          path: client/dist
