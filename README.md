@@ -311,7 +311,7 @@ When `object_storage_provider` is enabled:
 
 Recommended split:
 
-- Frontend: Vercel (root directory: `client`)
+- Frontend: Vercel (root directory: `frontend`)
 - Backend: Render Web Service (root directory: `backend`)
 
 ### Backend on Render
@@ -398,10 +398,3 @@ Manual CD run examples:
 
 - Deploy service only: run CD workflow with defaults.
 - Deploy and promote approved model: provide `promote_candidate_model_id` in the workflow input.
-
-## Screenshots
-
-Old screenshots were removed and replaced with renamed, descriptive assets.
-
-![Dashboard Overview - Teal Copper](client/src/assets/dashboard-overview-teal-copper.png)
-![Prediction What-If Analysis Panel](client/src/assets/prediction-whatif-analysis-panel.png)

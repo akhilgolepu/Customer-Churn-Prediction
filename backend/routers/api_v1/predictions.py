@@ -18,7 +18,6 @@ async def predict(
     payload: PredictionRequest,
     threshold: float = Query(default=0.5, ge=0.0, le=1.0),
     prediction_service=Depends(get_prediction_service),
-    _=Depends(require_roles("admin", "analyst")),
 ):
     return await prediction_service.predict(payload, threshold=threshold)
 
@@ -27,7 +26,6 @@ async def predict(
 async def explain(
     payload: PredictionRequest,
     prediction_service=Depends(get_prediction_service),
-    _=Depends(require_roles("admin", "analyst", "viewer")),
 ):
     return await prediction_service.explain(payload)
 
