@@ -17,7 +17,7 @@ import {
 
 interface Driver {
   feature: string;
-  value: any;
+  value: string | number | boolean;
   impact: number;
 }
 
