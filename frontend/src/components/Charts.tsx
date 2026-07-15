@@ -27,7 +27,6 @@ interface ChartsProps {
   simDrivers?: Driver[];
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function Charts({ predictions, drivers, simDrivers }: ChartsProps) {
   const totalPredictions = predictions.length;
   const churnCount = predictions.filter((p) => p.isChurn).length;

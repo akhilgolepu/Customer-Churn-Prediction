@@ -1,0 +1,265 @@
+{
+  "model_version": "auto_20260715T172623Z",
+  "timestamp": "2026-07-15T17:26:23.434620",
+  "overall_status": "failed",
+  "total_checks": 12,
+  "passed_checks": 9,
+  "failed_checks": 2,
+  "warning_checks": 1,
+  "checks": [
+    {
+      "name": "ROC AUC Score",
+      "category": "quality",
+      "status": "passed",
+      "details": {
+        "auc": 0.8430093776641092
+      },
+      "thresholds": {
+        "min_auc": 0.75
+      },
+      "expected": ">= 0.75",
+      "actual": 0.8430093776641092,
+      "message": "AUC = 0.8430"
+    },
+    {
+      "name": "Recall Score",
+      "category": "quality",
+      "status": "failed",
+      "details": {
+        "recall": 0.516042780748663
+      },
+      "thresholds": {
+        "min_recall": 0.65
+      },
+      "expected": ">= 0.65",
+      "actual": 0.516042780748663,
+      "message": "Recall = 0.5160"
+    },
+    {
+      "name": "Precision Score",
+      "category": "quality",
+      "status": "passed",
+      "details": {
+        "precision": 0.6795774647887324
+      },
+      "thresholds": {
+        "min_precision": 0.5
+      },
+      "expected": ">= 0.5",
+      "actual": 0.6795774647887324,
+      "message": "Precision = 0.6796"
+    },
+    {
+      "name": "F1 Score",
+      "category": "quality",
+      "status": "passed",
+      "details": {
+        "f1": 0.5866261398176292
+      },
+      "thresholds": {
+        "min_f1": 0.57
+      },
+      "expected": ">= 0.57",
+      "actual": 0.5866261398176292,
+      "message": "F1 = 0.5866"
+    },
+    {
+      "name": "Demographic Parity (contract_type)",
+      "category": "fairness",
+      "status": "failed",
+      "details": {
+        "positive_rate_group_0": 0.0,
+        "positive_rate_group_1": 0.36739974126778785,
+        "difference": 0.36739974126778785
+      },
+      "thresholds": {
+        "tolerance": 0.1
+      },
+      "expected": "difference <= 0.1",
+      "actual": 0.36739974126778785,
+      "message": "Group 0: 0.000, Group 1: 0.367, Diff: 0.367"
+    },
+    {
+      "name": "Latency (preprocess)",
+      "category": "performance",
+      "status": "passed",
+      "details": {
+        "latency_ms": 0.0
+      },
+      "thresholds": {
+        "max_preprocess_time_ms": 2000.0
+      },
+      "expected": "<= 2000.0ms",
+      "actual": 0.0,
+      "message": "0.00ms vs threshold 2000.0ms"
+    },
+    {
+      "name": "Latency (model_predict)",
+      "category": "performance",
+      "status": "passed",
+      "details": {
+        "latency_ms": 0.0
+      },
+      "thresholds": {
+        "max_model_predict_time_ms": 2000.0
+      },
+      "expected": "<= 2000.0ms",
+      "actual": 0.0,
+      "message": "0.00ms vs threshold 2000.0ms"
+    },
+    {
+      "name": "Latency (api_e2e)",
+      "category": "performance",
+      "status": "warning",
+      "details": {
+        "latency_ms": 0.0
+      },
+      "thresholds": {},
+      "expected": "Known stage",
+      "actual": "api_e2e",
+      "message": "Unknown stage: api_e2e"
+    },
+    {
+      "name": "Memory Usage",
+      "category": "performance",
+      "status": "passed",
+      "details": {
+        "memory_mb": 0.0
+      },
+      "thresholds": {
+        "max_memory_mb": 500.0
+      },
+      "expected": "<= 500.0MB",
+      "actual": 0.0,
+      "message": "0.00MB vs threshold 500.0MB"
+    },
+    {
+      "name": "Column Presence",
+      "category": "data_integrity",
+      "status": "passed",
+      "details": {
+        "expected_columns": [
+          "MonthlyCharges",
+          "tenure",
+          "TotalCharges",
+          "SeniorCitizen",
+          "TotalServices",
+          "IsFiberCustomer",
+          "IsMonthToMonth",
+          "TechIssueRisk",
+          "PaymentRisk",
+          "HasPhoneAndInternet",
+          "Partner",
+          "Dependents",
+          "PhoneService",
+          "MultipleLines",
+          "InternetService",
+          "OnlineSecurity",
+          "OnlineBackup",
+          "DeviceProtection",
+          "TechSupport",
+          "StreamingTV",
+          "StreamingMovies",
+          "Contract",
+          "PaperlessBilling",
+          "PaymentMethod",
+          "TenureGroup"
+        ],
+        "actual_columns": [
+          "MonthlyCharges",
+          "tenure",
+          "TotalCharges",
+          "SeniorCitizen",
+          "TotalServices",
+          "IsFiberCustomer",
+          "IsMonthToMonth",
+          "TechIssueRisk",
+          "PaymentRisk",
+          "HasPhoneAndInternet",
+          "Partner",
+          "Dependents",
+          "PhoneService",
+          "MultipleLines",
+          "InternetService",
+          "OnlineSecurity",
+          "OnlineBackup",
+          "DeviceProtection",
+          "TechSupport",
+          "StreamingTV",
+          "StreamingMovies",
+          "Contract",
+          "PaperlessBilling",
+          "PaymentMethod",
+          "TenureGroup"
+        ],
+        "missing": [],
+        "extra": []
+      },
+      "thresholds": {
+        "required_columns": 25
+      },
+      "expected": "25 columns",
+      "actual": "25 columns",
+      "message": "All columns present"
+    },
+    {
+      "name": "Data Types",
+      "category": "data_integrity",
+      "status": "passed",
+      "details": {
+        "mismatches": {}
+      },
+      "thresholds": {},
+      "expected": "{'MonthlyCharges': 'float64', 'tenure': 'int64', 'TotalCharges': 'float64', 'SeniorCitizen': 'int64', 'TotalServices': 'int64', 'IsFiberCustomer': 'int64', 'IsMonthToMonth': 'int64', 'TechIssueRisk': 'int64', 'PaymentRisk': 'int64', 'HasPhoneAndInternet': 'int64', 'Partner': 'object', 'Dependents': 'object', 'PhoneService': 'object', 'MultipleLines': 'object', 'InternetService': 'object', 'OnlineSecurity': 'object', 'OnlineBackup': 'object', 'DeviceProtection': 'object', 'TechSupport': 'object', 'StreamingTV': 'object', 'StreamingMovies': 'object', 'Contract': 'object', 'PaperlessBilling': 'object', 'PaymentMethod': 'object', 'TenureGroup': 'category'}",
+      "actual": "{'MonthlyCharges': 'float64', 'tenure': 'int64', 'TotalCharges': 'float64', 'SeniorCitizen': 'int64', 'TotalServices': 'int64', 'IsFiberCustomer': 'int64', 'IsMonthToMonth': 'int64', 'TechIssueRisk': 'int64', 'PaymentRisk': 'int64', 'HasPhoneAndInternet': 'int64', 'Partner': 'object', 'Dependents': 'object', 'PhoneService': 'object', 'MultipleLines': 'object', 'InternetService': 'object', 'OnlineSecurity': 'object', 'OnlineBackup': 'object', 'DeviceProtection': 'object', 'TechSupport': 'object', 'StreamingTV': 'object', 'StreamingMovies': 'object', 'Contract': 'object', 'PaperlessBilling': 'object', 'PaymentMethod': 'object', 'TenureGroup': 'category'}",
+      "message": "All dtypes correct"
+    },
+    {
+      "name": "Missing Data",
+      "category": "data_integrity",
+      "status": "passed",
+      "details": {
+        "missing_by_column": {
+          "MonthlyCharges": 0.0,
+          "tenure": 0.0,
+          "TotalCharges": 0.0,
+          "SeniorCitizen": 0.0,
+          "TotalServices": 0.0,
+          "IsFiberCustomer": 0.0,
+          "IsMonthToMonth": 0.0,
+          "TechIssueRisk": 0.0,
+          "PaymentRisk": 0.0,
+          "HasPhoneAndInternet": 0.0,
+          "Partner": 0.0,
+          "Dependents": 0.0,
+          "PhoneService": 0.0,
+          "MultipleLines": 0.0,
+          "InternetService": 0.0,
+          "OnlineSecurity": 0.0,
+          "OnlineBackup": 0.0,
+          "DeviceProtection": 0.0,
+          "TechSupport": 0.0,
+          "StreamingTV": 0.0,
+          "StreamingMovies": 0.0,
+          "Contract": 0.0,
+          "PaperlessBilling": 0.0,
+          "PaymentMethod": 0.0,
+          "TenureGroup": 0.0
+        },
+        "max_missing_percent": 0.0
+      },
+      "thresholds": {
+        "max_missing_percent": 1.0
+      },
+      "expected": "<= 1.0%",
+      "actual": 0.0,
+      "message": "Max missing: 0.00%"
+    }
+  ],
+  "blockers": [
+    "Model quality metrics below thresholds",
+    "Fairness check failed: demographic parity not achieved"
+  ],
+  "warnings": [],
+  "promotion_allowed": false
+}

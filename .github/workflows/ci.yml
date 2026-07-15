@@ -45,7 +45,7 @@ jobs:
           import numpy as np
           X = np.random.rand(5, 5)
           y = np.random.randint(0, 2, 5)
-          model = CatBoostClassifier(iterations=1, quiet=True)
+          model = CatBoostClassifier(iterations=1, verbose=False)
           model.fit(X, y)
           model.save_model('model/artifacts/catboost_churn.cbm')
           "
