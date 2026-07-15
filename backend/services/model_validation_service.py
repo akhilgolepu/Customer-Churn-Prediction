@@ -12,19 +12,16 @@ can be promoted from candidate → shadow → active. Checks include:
 import json
 import time
 import logging
-import psutil
 import tracemalloc
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
-import threading
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
-    roc_auc_score, recall_score, precision_score, f1_score,
-    confusion_matrix, roc_curve
+    roc_auc_score, recall_score, precision_score, f1_score
 )
 
 logger = logging.getLogger(__name__)

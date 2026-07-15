@@ -220,7 +220,6 @@ class TestMLflowIntegrationPatterns:
         ]
 
         with tracker.tracking_run(run_name="cv_workflow"):
-            import mlflow
             from backend.services.mlflow_tracker import log_cross_validation_results
 
             log_cross_validation_results(fold_results)

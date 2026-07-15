@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
-import tempfile
 
 import numpy as np
 import pandas as pd
@@ -21,16 +20,6 @@ try:
     from evidently.metrics import (
         DataDriftTable,
         DataQualityTable,
-        ClassificationQualityMetrics,
-        ConfusionMatrix,
-        RocCurve,
-    )
-    from evidently.test_suite import TestSuite
-    from evidently.tests import (
-        TestNumberOfDriftedFeatures,
-        TestNumberOfMissingValues,
-        TestShareOfOutliersInNumericColumns,
-        TestMeanInNSigmas,
     )
     HAS_EVIDENTLY = True
 except ImportError:

@@ -44,6 +44,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Dependency vulnerability scan (npm audit)
+        run: |
+          cd frontend
+          npm audit --audit-level=critical
+
       - name: Checkout code
         uses: actions/checkout@v4
 

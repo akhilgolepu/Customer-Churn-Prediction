@@ -5,7 +5,6 @@ Supports Slack, Email, PagerDuty, and custom webhooks for alert delivery.
 """
 
 import logging
-import json
 from typing import Dict, List, Optional, Any
 from enum import Enum
 from abc import ABC, abstractmethod

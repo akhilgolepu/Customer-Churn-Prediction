@@ -163,7 +163,7 @@ class TestEvidentiallyDriftDetector:
         })
 
         try:
-            report = detector.detect_data_drift(production_data)
+            detector.detect_data_drift(production_data)
 
             # Test retraining trigger with mock critical report
             critical_report = DriftReport(
