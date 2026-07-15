@@ -106,9 +106,9 @@ class SlackAlertChannel(AlertChannel):
                 payload["attachments"][0]["fields"] = fields
 
             if self.channel:
-                payload["channel"] = self.channel
+                payload["channel"] = self.channel # type: ignore
 
-            response = requests.post(self.webhook_url, json=payload)
+            response = requests.post(self.webhook_url, json=payload, timeout=10)
             if response.status_code == 200:
                 logger.info(f"Slack alert sent: {title}")
                 return True
@@ -246,6 +246,7 @@ class PagerDutyAlertChannel(AlertChannel):
             response = requests.post(
                 "https://events.pagerduty.com/v2/enqueue",
                 json=payload,
+                timeout=10
             )
 
             if response.status_code == 202:

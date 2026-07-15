@@ -95,7 +95,7 @@ class PredictionService:
                 self._model_registry_service.rollback()
                 if self._canary_service is not None:
                     self._canary_service.disable()
-            except Exception:
+            except Exception:   # nosec B110
                 # Rollback attempts should not fail prediction path.
                 pass
 

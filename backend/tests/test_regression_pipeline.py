@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import time
 
+import pytest
 import pandas as pd
 from fastapi.testclient import TestClient
 
@@ -21,7 +22,10 @@ API_PREDICT_LATENCY_SECONDS = 6.0
 
 
 def _load_sample_payload() -> dict:
-    df = pd.read_csv(SAMPLE_DATASET)
+    try:
+        df = pd.read_csv(SAMPLE_DATASET)
+    except FileNotFoundError:
+        pytest.skip(f"Dataset not found at {SAMPLE_DATASET}. Skipping test in CI environment.")
     row = df.iloc[0]
     return {
         "MonthlyCharges": float(row["MonthlyCharges"]),

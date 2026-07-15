@@ -42,7 +42,7 @@ class AuthService:
         return {
             "access_token": create_access_token(subject=username, role=role),
             "refresh_token": create_refresh_token(subject=username, role=role),
-            "token_type": "bearer",
+            "token_type": "bearer", # nosec B105
         }
 
     def refresh(self, refresh_token: str) -> dict[str, str]:
@@ -56,7 +56,7 @@ class AuthService:
         return {
             "access_token": create_access_token(subject=subject, role=role),
             "refresh_token": create_refresh_token(subject=subject, role=role),
-            "token_type": "bearer",
+            "token_type": "bearer", # nosec B105
         }
 
     def get_user_from_access_token(self, token: str) -> AuthUser:
