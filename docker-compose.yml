@@ -22,11 +22,11 @@ services:
       timeout: 5s
       retries: 5
 
-  client:
+  frontend:
     build:
-      context: .
-      dockerfile: client/Dockerfile
-    container_name: churn-client
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: churn-frontend
     ports:
       - "5173:80"
     depends_on:

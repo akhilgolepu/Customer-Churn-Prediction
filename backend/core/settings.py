@@ -29,11 +29,16 @@ def _parse_allowed_origins(value: str) -> list[str]:
 
 
 class Settings(BaseSettings):
+    
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Customer Churn Predictor"
     environment: str = "development"
     api_prefix: str = "/api/v1"
+
+    model_path: str = str(
+        Path(__file__).resolve().parents[2] / "model" / "artifacts" / "catboost_churn.cbm"
+    )
 
     secret_key: str = "change-me-in-production"
     access_token_minutes: int = 30
@@ -107,6 +112,7 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     # Manually handle ALLOWED_ORIGINS to avoid Pydantic env parsing errors
+    
     allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "").strip()
     allowed_origins = _parse_allowed_origins(allowed_origins_raw) if allowed_origins_raw else ["http://localhost:5173"]
     

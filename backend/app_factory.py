@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
+from typing import Any  # Imported for clean static type coordination
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -75,6 +76,14 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(title=settings.app_name)
+
+    # Permanent Fix: Explicitly declare open polymorphic types for factory injection
+    feedback_repo: Any
+    monitoring_repo: Any
+    model_registry_repo: Any
+    prediction_repo: Any
+    job_repo: Any
+    audit_repo: Any
 
     effective_org_id = settings.default_org_id
     if settings.database_backend.lower() == "postgres":
@@ -170,7 +179,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Temporary: accept all origins for debugging
+        allow_origins=settings.allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

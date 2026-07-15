@@ -5,14 +5,14 @@ import shutil
 import tempfile
 from threading import Lock
 import zipfile
-
+from core.settings import get_settings
 from catboost import CatBoostClassifier
 import shap
 
 from storage.factory import build_object_storage
 
 _BASE_DIR = Path(__file__).parent.parent
-MODEL_PATH = _BASE_DIR / "model" / "artifacts" / "catboost_churn.cbm"
+MODEL_PATH = Path(get_settings().model_path)
 
 
 class ModelRuntimeManager:
