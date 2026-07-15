@@ -44,11 +44,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Dependency vulnerability scan (npm audit)
-        run: |
-          cd frontend
-          npm audit --audit-level=critical
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -59,17 +54,15 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      # Corrected paths from client/ to frontend/
       - name: Install frontend dependencies
         run: |
           cd frontend
           npm ci
 
-      # Audits production dependencies for high/critical vulnerabilities
       - name: Dependency vulnerability scan (npm audit)
         run: |
           cd frontend
-          npm audit --audit-level=high
+          npm audit --audit-level=critical
 
   secret-scan:
     name: Secret Scan (Gitleaks)

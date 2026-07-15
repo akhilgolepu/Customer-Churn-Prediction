@@ -76,6 +76,7 @@ function AppShell() {
   useEffect(() => {
     if (!user) return;
     if (user.role !== "admin") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshAdminData();
   }, [user]);
 

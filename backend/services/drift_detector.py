@@ -16,10 +16,10 @@ import numpy as np
 import pandas as pd
 
 try:
-    from evidently.report import Report
-    from evidently.metrics import (
-        DataDriftTable,
-        DataQualityTable,
+    from evidently.report import Report # type: ignore
+    from evidently.metrics import (     
+        DataDriftTable, # type: ignore
+        DataQualityTable, # type: ignore
     )
     HAS_EVIDENTLY = True
 except ImportError:
@@ -199,8 +199,9 @@ class EvidentiallyDriftDetector:
         report_id = f"perf_drift_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
         timestamp = datetime.utcnow().isoformat()
 
-        current_auc = roc_auc_score(y_true, y_pred_proba)
-        auc_drop = reference_auc - current_auc
+        # Ensure scikit-learn returns native floats
+        current_auc = float(roc_auc_score(y_true, y_pred_proba))
+        auc_drop = float(reference_auc - current_auc)
 
         drifted = auc_drop > 0.05  # > 5% drop indicates drift
 
@@ -264,12 +265,13 @@ class EvidentiallyDriftDetector:
             if col not in production_data.columns:
                 continue
 
-            mean = production_data[col].mean()
-            std = production_data[col].std()
+            # Explicitly cast to native Python floats to satisfy static typing
+            mean = float(production_data[col].mean())
+            std = float(production_data[col].std())
 
             outliers = np.abs(production_data[col] - mean) > sigma_threshold * std
-            outlier_count = outliers.sum()
-            outlier_pct = outlier_count / len(production_data) * 100
+            outlier_count = int(outliers.sum())
+            outlier_pct = float(outlier_count / len(production_data) * 100)
 
             if outlier_pct > 1.0:  # Flag if > 1% outliers
                 outlier_features.append(col)

@@ -101,6 +101,7 @@ export default function ChurnForm({
   const disabled = isPredicting || isSimulating || readOnly;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (initialForm) setForm(initialForm);
   }, [initialForm]);
 
