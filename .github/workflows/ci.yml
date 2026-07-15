@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -24,8 +24,8 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
-          pip install ruff
+          pip install -r requirements.txt
+          pip install ruff pytest httpx shap catboost
 
       - name: Lint backend code
         run: |
@@ -35,19 +35,40 @@ jobs:
         run: |
           python -m compileall backend model/training
 
-      - name: Run backend regression tests
+      # MLOps Design Pattern: Synthesize a tiny valid model placeholder 
+      # so the app factory loops can compile without pulling heavy DVC files.
+      - name: Generate mock model for runtime validation
         run: |
-          pip install pytest httpx
+          mkdir -p model/artifacts
+          python -c "
+          from catboost import CatBoostClassifier
+          import numpy as np
+          X = np.random.rand(5, 5)
+          y = np.random.randint(0, 2, 5)
+          model = CatBoostClassifier(iterations=1, quiet=True)
+          model.fit(X, y)
+          model.save_model('model/artifacts/catboost_churn.cbm')
+          "
+
+      # Sets PYTHONPATH to the root workspace so cross-folder imports resolve smoothly
+      - name: Run backend regression tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          DATABASE_BACKEND: sqlite
+        run: |
           pytest -q backend/tests --maxfail=1 --disable-warnings
 
       - name: Backend smoke test (SQLite app factory)
         env:
+          PYTHONPATH: ${{ github.workspace }}
           DATABASE_BACKEND: sqlite
         run: |
           cd backend
           python -c "from app_factory import create_app; app=create_app(); assert len(app.routes) > 0; print('backend_app_ok', len(app.routes))"
 
       - name: Data pipeline validation (dataset registry report)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python model/training/build_dataset_report.py
 
@@ -62,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Node.js
@@ -70,25 +91,25 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: client/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
         run: |
-          cd client
+          cd frontend
           npm ci
 
       - name: Lint frontend code
         run: |
-          cd client
+          cd frontend
           npm run lint
 
       - name: Build frontend
         run: |
-          cd client
+          cd frontend
           npm run build
 
       - name: Upload frontend build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: client-dist
-          path: client/dist
+          name: frontend-dist
+          path: frontend/dist
