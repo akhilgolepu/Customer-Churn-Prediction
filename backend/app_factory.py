@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any  # Imported for clean static type coordination
 
 from fastapi import FastAPI
+import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.exception_handlers import register_exception_handlers
@@ -48,7 +49,6 @@ from services.prediction_service import PredictionService
 from services.recommendation_service import RecommendationService
 from services.retraining_service import RetrainingOrchestrator
 from storage.factory import build_object_storage
-
 
 @dataclass
 class AppState:
@@ -180,6 +180,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
+        allow_origin_regex=r"https://customer-churn-prediction-.*\.vercel\.app",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
