@@ -88,6 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [release_gate, promote_model]
     if: >-
+      always() &&
       needs.release_gate.outputs.deploy_backend == 'true' &&
       (needs.promote_model.result == 'success' || needs.promote_model.result == 'skipped')
     steps:
@@ -126,7 +127,10 @@ jobs:
     name: Deploy Frontend (Vercel)
     runs-on: ubuntu-latest
     needs: [release_gate, deploy_backend]
-    if: needs.release_gate.outputs.deploy_frontend == 'true'
+    if: >-
+      always() &&
+      needs.release_gate.outputs.deploy_frontend == 'true' &&
+      (needs.deploy_backend.result == 'success' || needs.deploy_backend.result == 'skipped')
     steps:
       - name: Trigger Vercel deploy
         env:
