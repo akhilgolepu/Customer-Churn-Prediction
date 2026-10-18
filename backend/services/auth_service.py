@@ -3,7 +3,7 @@ import logging
 
 from core.cache import cache_client
 from core.exceptions import UnauthorizedError
-from core.settings import get_settings
+from core.settings import Settings, get_settings
 from core.security import create_access_token, create_refresh_token, decode_token, hash_password, verify_password
 
 
@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 # INSECURE, publicly known defaults. Used only when ENVIRONMENT=development and
 # the corresponding *_PASSWORD variable is unset.
 DEV_DEFAULT_PASSWORDS = {"admin": "admin123", "analyst": "analyst123", "viewer": "viewer123"}
-INSECURE_DEFAULT_SECRET_KEY = "change-me-in-production"
+# The published SECRET_KEY default, read from Settings rather than repeated here.
+INSECURE_DEFAULT_SECRET_KEY = Settings.model_fields["secret_key"].default
 _ROLES = {"admin": "admin", "analyst": "analyst", "viewer": "viewer"}
 
 

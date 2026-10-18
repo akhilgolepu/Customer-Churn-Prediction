@@ -137,6 +137,11 @@ def main(write: bool) -> None:
     s_p = scenarios[primary]
 
     gains = {
+        # Headline baseline: the untuned 0.50 cut-off. 0.62 was tuned on the old
+        # class-weighted model's scores, so a gain over it would be overstated.
+        "empirical_minus_0.50_test": bootstrap_gain(
+            y_te, p_te, s_p["empirical_threshold_validation"], 0.50, value_p,
+            prim_cfg["offer_cost"], prim_cfg["save_rate"], boot["n_resamples"], boot["seed"]),
         "empirical_minus_old_default_0.62_test": bootstrap_gain(
             y_te, p_te, s_p["empirical_threshold_validation"], OLD_DEFAULT, value_p,
             prim_cfg["offer_cost"], prim_cfg["save_rate"], boot["n_resamples"], boot["seed"]),

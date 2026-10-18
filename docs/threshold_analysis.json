@@ -117,6 +117,10 @@
     }
   },
   "primary_bootstrap_95ci_per_1000": {
+    "empirical_minus_0.50_test": [
+      -420.9732239710798,
+      1888.3198354581518
+    ],
     "empirical_minus_old_default_0.62_test": [
       1431.2885683529914,
       4682.114672874572
