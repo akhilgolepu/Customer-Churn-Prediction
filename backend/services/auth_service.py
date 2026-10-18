@@ -1,9 +1,56 @@
 from dataclasses import dataclass
+import logging
 
 from core.cache import cache_client
 from core.exceptions import UnauthorizedError
 from core.settings import get_settings
 from core.security import create_access_token, create_refresh_token, decode_token, hash_password, verify_password
+
+
+logger = logging.getLogger(__name__)
+
+# INSECURE, publicly known defaults. Used only when ENVIRONMENT=development and
+# the corresponding *_PASSWORD variable is unset.
+DEV_DEFAULT_PASSWORDS = {"admin": "admin123", "analyst": "analyst123", "viewer": "viewer123"}
+INSECURE_DEFAULT_SECRET_KEY = "change-me-in-production"
+_ROLES = {"admin": "admin", "analyst": "analyst", "viewer": "viewer"}
+
+
+class InsecureConfigurationError(RuntimeError):
+    pass
+
+
+def resolve_seed_passwords(settings) -> dict[str, str]:
+    """Passwords for the seeded users, from settings / environment.
+
+    Outside ENVIRONMENT=development every password must be set explicitly and
+    must not be one of the published development defaults.
+    """
+    configured = {
+        "admin": settings.admin_password,
+        "analyst": settings.analyst_password,
+        "viewer": settings.viewer_password,
+    }
+    is_dev = settings.environment.strip().lower() == "development"
+    problems = []
+    resolved = {}
+    for user, password in configured.items():
+        if password:
+            if not is_dev and password == DEV_DEFAULT_PASSWORDS[user]:
+                problems.append(f"{user.upper()}_PASSWORD is the published development default")
+            resolved[user] = password
+        elif is_dev:
+            logger.warning("%s_PASSWORD not set; using the INSECURE development default", user.upper())
+            resolved[user] = DEV_DEFAULT_PASSWORDS[user]
+        else:
+            problems.append(f"{user.upper()}_PASSWORD is not set")
+    if not is_dev and settings.secret_key == INSECURE_DEFAULT_SECRET_KEY:
+        problems.append("SECRET_KEY is the published default")
+    if problems:
+        raise InsecureConfigurationError(
+            f"Refusing to start with ENVIRONMENT={settings.environment}: " + "; ".join(problems)
+        )
+    return resolved
 
 
 @dataclass
@@ -14,24 +61,19 @@ class AuthUser:
 
 class AuthService:
     def __init__(self) -> None:
-        # Seed users. In production, move to DB/secret store.
+        settings = get_settings()
+        # Seed users; passwords come from the environment (resolve_seed_passwords).
         self._users = {
-            "admin": {"password_hash": hash_password("admin123"), "role": "admin"},
-            "analyst": {"password_hash": hash_password("analyst123"), "role": "analyst"},
-            "viewer": {"password_hash": hash_password("viewer123"), "role": "viewer"},
+            user: {"password_hash": hash_password(password), "role": _ROLES[user]}
+            for user, password in resolve_seed_passwords(settings).items()
         }
-        self._cache_ttl = get_settings().cache_ttl_seconds
+        self._cache_ttl = settings.cache_ttl_seconds
 
     def _get_user_record(self, username: str) -> dict | None:
-        cache_key = f"auth:user:{username}"
-        cached = cache_client.get_json(cache_key)
-        if cached is not None:
-            return cached
-
-        record = self._users.get(username)
-        if record is not None:
-            cache_client.set_json(cache_key, record, self._cache_ttl)
-        return record
+        # Not cached: the records are already in memory, and caching them kept a
+        # replaced password valid until the TTL expired (and put password hashes
+        # into Redis when it is enabled).
+        return self._users.get(username)
 
     def login(self, username: str, password: str) -> dict[str, str]:
         record = self._get_user_record(username)

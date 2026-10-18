@@ -9,6 +9,7 @@ import {
   getJob,
   getModelRegistry,
   getMonitoringSnapshot,
+  loginWithPassword,
   loginWithRole,
   promoteModel,
   rollbackModel,
@@ -57,6 +58,8 @@ function AppShell() {
   const [loginName, setLoginName] = useState(user?.name ?? "");
   const [loginTeam, setLoginTeam] = useState(user?.team ?? "Growth Ops");
   const [loginRole, setLoginRole] = useState<Role>(user?.role ?? "analyst");
+  // Admin has no shipped credentials: the password is typed and never stored.
+  const [adminPassword, setAdminPassword] = useState("");
 
   const refreshAdminData = async () => {
     try {
@@ -223,19 +226,36 @@ function AppShell() {
                 onChange={(event) => setLoginRole(event.target.value as Role)}
                 className="mt-1 w-full rounded-xl border border-border bg-base px-3 py-2 text-sm focus:border-accent focus:outline-none"
               >
-                <option value="admin">Admin</option>
-                <option value="analyst">Analyst</option>
-                <option value="viewer">Viewer</option>
+                <option value="analyst">Analyst (public demo login)</option>
+                <option value="viewer">Viewer (public demo login)</option>
+                <option value="admin">Admin (password required)</option>
               </select>
             </div>
+            {loginRole === "admin" && (
+              <div>
+                <label htmlFor="admin-password" className="text-sm font-semibold">Admin password</label>
+                <input
+                  id="admin-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={adminPassword}
+                  onChange={(event) => setAdminPassword(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-border bg-base px-3 py-2 text-sm focus:border-accent focus:outline-none"
+                />
+              </div>
+            )}
             <button
               type="button"
               onClick={() => {
                 const name = loginName.trim() || "Team Member";
                 const team = loginTeam.trim() || "Growth Ops";
                 const nextUser: SessionUser = { name, team, role: loginRole };
-                loginWithRole(loginRole)
+                const login = loginRole === "admin"
+                  ? loginWithPassword("admin", adminPassword)
+                  : loginWithRole(loginRole);
+                login
                   .then(() => {
+                    setAdminPassword("");
                     setUser(nextUser);
                     trackEvent("auth_login", { role: loginRole, team });
                     pushToast({ title: "Signed in", description: `Welcome ${name}.`, variant: "success" });
@@ -275,6 +295,7 @@ function AppShell() {
               value={user.role}
               onChange={(event) => {
                 const nextRole = event.target.value as Role;
+                if (nextRole === "admin") return; // admin is only reachable by signing in with its password
                 setUser({ ...user, role: nextRole });
                 trackEvent("role_changed", { role: nextRole });
                 if (viewMode === "admin" && nextRole !== "admin") setViewMode("workspace");
@@ -286,7 +307,7 @@ function AppShell() {
               className="rounded-lg border border-border bg-surface px-2 py-1.5 text-sm"
               aria-label="Switch role"
             >
-              <option value="admin">Admin</option>
+              {user.role === "admin" && <option value="admin">Admin</option>}
               <option value="analyst">Analyst</option>
               <option value="viewer">Viewer</option>
             </select>

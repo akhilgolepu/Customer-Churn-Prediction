@@ -35,20 +35,9 @@ jobs:
         run: |
           python -m compileall backend model/training
 
-      # MLOps Design Pattern: Synthesize a tiny valid model placeholder 
-      # so the app factory loops can compile without pulling heavy DVC files.
-      - name: Generate mock model for runtime validation
-        run: |
-          mkdir -p model/artifacts
-          python -c "
-          from catboost import CatBoostClassifier
-          import numpy as np
-          X = np.random.rand(5, 5)
-          y = np.random.randint(0, 2, 5)
-          model = CatBoostClassifier(iterations=1, verbose=False)
-          model.fit(X, y)
-          model.save_model('model/artifacts/catboost_churn.cbm')
-          "
+      # The served model (model/artifacts/catboost_churn.cbm + its calibration
+      # file) is tracked in git, so tests run against the real artifact. (A step
+      # that overwrote it with a 5-feature mock model was removed.)
 
       # Sets PYTHONPATH to the root workspace so cross-folder imports resolve smoothly
       - name: Run backend regression tests

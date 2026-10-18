@@ -9,6 +9,8 @@ from core.settings import get_settings
 from catboost import CatBoostClassifier
 import shap
 
+from model.calibration import Calibrator, load_for_model
+
 from storage.factory import build_object_storage
 
 _BASE_DIR = Path(__file__).parent.parent
@@ -20,11 +22,12 @@ class ModelRuntimeManager:
         self._lock = Lock()
         self._object_storage = build_object_storage()
         self._default_model_path = default_model_path
-        self._active_model = self._load_model(default_model_path)
+        self._active_model, self._active_calibrator = self._load_model(default_model_path)
         self._active_explainer = shap.TreeExplainer(self._active_model)
         self._active_model_path = str(default_model_path)
         self._active_bundle_dir: Path | None = None
         self._shadow_model = None
+        self._shadow_calibrator: Calibrator | None = None
         self._shadow_model_path = None
         self._shadow_bundle_dir: Path | None = None
 
@@ -106,10 +109,18 @@ class ModelRuntimeManager:
             return model_path, bundle_dir
         return resolved_path, None
 
-    def _load_model(self, model_path: Path) -> CatBoostClassifier:
+    def _load_model(self, model_path: Path) -> tuple[CatBoostClassifier, Calibrator]:
+        """Load a .cbm and its calibration. A bundle keeps it at model/calibration.json,
+        a loose .cbm next to it as <name>.calibration.json. Without one the raw score
+        is served (identity), which is how pre-calibration artifacts behave."""
         model = CatBoostClassifier()
         model.load_model(str(model_path))
-        return model
+        bundled = model_path.parent / "calibration.json"
+        if model_path.name == "model.cbm" and bundled.exists():
+            calibrator = Calibrator.load(bundled)
+        else:
+            calibrator = load_for_model(model_path)
+        return model, calibrator
 
     def set_active_model(self, artifact_path: str) -> None:
         model_path, bundle_dir = self._resolve_model_artifact(artifact_path)
@@ -117,8 +128,9 @@ class ModelRuntimeManager:
             raise RuntimeError(f"Model artifact not found: {model_path}")
 
         with self._lock:
-            active = self._load_model(model_path)
+            active, calibrator = self._load_model(model_path)
             self._active_model = active
+            self._active_calibrator = calibrator
             self._active_explainer = shap.TreeExplainer(active)
             old_bundle = self._active_bundle_dir
             self._active_bundle_dir = bundle_dir
@@ -130,6 +142,7 @@ class ModelRuntimeManager:
             with self._lock:
                 old_bundle = self._shadow_bundle_dir
                 self._shadow_model = None
+                self._shadow_calibrator = None
                 self._shadow_model_path = None
                 self._shadow_bundle_dir = None
                 self._cleanup_bundle_dir(old_bundle)
@@ -140,7 +153,7 @@ class ModelRuntimeManager:
             raise RuntimeError(f"Shadow artifact not found: {model_path}")
 
         with self._lock:
-            self._shadow_model = self._load_model(model_path)
+            self._shadow_model, self._shadow_calibrator = self._load_model(model_path)
             old_bundle = self._shadow_bundle_dir
             self._shadow_bundle_dir = bundle_dir
             self._shadow_model_path = artifact_path
@@ -149,25 +162,48 @@ class ModelRuntimeManager:
     def predict_active(self, features) -> float:
         with self._lock:
             proba = self._active_model.predict_proba(features)
-        return float(proba[0][1])
+            calibrator = self._active_calibrator
+        return float(calibrator.transform(proba[0][1]))
 
     def predict_shadow(self, features) -> float | None:
         with self._lock:
             if self._shadow_model is None:
                 return None
             proba = self._shadow_model.predict_proba(features)
-        return float(proba[0][1])
+            calibrator = self._shadow_calibrator
+        return float(calibrator.transform(proba[0][1]))
 
     def explain_active(self, df):
+        # SHAP values are in the raw model's log-odds space. Calibration is a
+        # monotone map applied afterwards, so the ranking of drivers is unchanged.
         with self._lock:
             shap_values = self._active_explainer.shap_values(df)[0]
         return shap_values
+
+    def load_scorer(self, artifact_path: str):
+        """Load an artifact outside the runtime (does not touch active/shadow) and
+        return predict_fn(frame) -> calibrated P(churn) per row. Used by the
+        promotion gate."""
+        model_path, bundle_dir = self._resolve_model_artifact(artifact_path)
+        try:
+            if not model_path.exists():
+                raise RuntimeError(f"Model artifact not found: {model_path}")
+            model, calibrator = self._load_model(model_path)
+        finally:
+            self._cleanup_bundle_dir(bundle_dir)
+
+        def predict_fn(features):
+            return calibrator.transform(model.predict_proba(features)[:, 1])
+
+        return predict_fn
 
     def state(self) -> dict[str, str | None]:
         with self._lock:
             return {
                 "active_model_path": self._active_model_path,
+                "active_calibration": self._active_calibrator.method,
                 "shadow_model_path": self._shadow_model_path,
+                "shadow_calibration": self._shadow_calibrator.method if self._shadow_calibrator else None,
             }
 
 
@@ -187,6 +223,10 @@ def predict_shadow_proba(features):
 
 def explain(df):
     return runtime_manager.explain_active(df)
+
+
+def load_scorer(artifact_path: str):
+    return runtime_manager.load_scorer(artifact_path)
 
 
 def switch_active_model(artifact_path: str) -> None:

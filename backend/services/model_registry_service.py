@@ -2,9 +2,11 @@
 Model Registry Service - Enhanced with validation gates.
 
 Manages model promotion workflow: candidate → shadow → active.
-All promotions are gated by the validation service.
+Every promotion runs the PromotionGate (ModelValidationGate on labelled data)
+first; blockers refuse the promotion unless an audit-logged override is given.
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Optional, Dict
@@ -14,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 try:
-    from core.exceptions import NotFoundError
+    from core.exceptions import AppError, NotFoundError, PromotionBlockedError
     from model_loader import switch_active_model, switch_shadow_model
     from repositories.model_registry_repository import ModelRegistryRepository
     HAS_LEGACY_DEPS = True
@@ -25,6 +27,8 @@ from backend.services.model_validation_service import ModelValidationGate
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_REPORTS_DIR = Path(__file__).resolve().parents[1] / "data" / "validation_reports"
+
 
 class ModelRegistryService:
     """Enhanced registry service with validation gates."""
@@ -34,11 +38,14 @@ class ModelRegistryService:
         repo: Optional['ModelRegistryRepository'] = None,
         audit_service=None,
         validation_reports_dir: Optional[Path] = None,
+        promotion_gate=None,
     ) -> None:
-        """Initialize with optional legacy repository."""
+        """promotion_gate: object with evaluate(version, candidate_artifact, active_artifact) -> dict
+        (services.promotion_gate.PromotionGate). Without one, promote_candidate refuses to run."""
         self._repo = repo
         self._audit_service = audit_service
-        self.validation_reports_dir = validation_reports_dir or Path("backend/data/validation_reports")
+        self._promotion_gate = promotion_gate
+        self.validation_reports_dir = validation_reports_dir or _DEFAULT_REPORTS_DIR
         self.validation_reports_dir.mkdir(parents=True, exist_ok=True)
         self.validation_gate = ModelValidationGate()
         self._has_legacy = HAS_LEGACY_DEPS and repo is not None
@@ -113,14 +120,68 @@ class ModelRegistryService:
             "shadow_model_id": shadow_model_id,
         }
 
-    def promote_candidate(self, candidate_model_id: str) -> dict:
-        """Promote candidate to active (with validation gate)."""
+    def promote_candidate(
+        self,
+        candidate_model_id: str,
+        *,
+        override_gate: bool = False,
+        override_reason: Optional[str] = None,
+        actor: Optional[str] = None,
+    ) -> dict:
+        """Promote candidate to active after the validation gate passes.
+
+        Blockers raise PromotionBlockedError (HTTP 409). override_gate=True with a
+        reason promotes anyway and writes a model_promotion_gate_overridden audit event.
+        """
         if not self._has_legacy:
             return {"error": "Legacy repository not configured"}
+        if self._promotion_gate is None:
+            raise AppError("gate_not_configured", "Promotion gate is not configured", status_code=500)
 
         candidate = self._repo.get(candidate_model_id)
         if candidate is None:
             raise NotFoundError("Candidate model not found")
+        if override_gate and not (override_reason and override_reason.strip()):
+            raise AppError("override_reason_required", "override_gate requires a non-empty override_reason", 422)
+
+        current_active_id, _ = self._repo.state()
+        current_active = self._repo.get(current_active_id) if current_active_id else None
+        gate = self._promotion_gate.evaluate(
+            candidate.version,
+            candidate.artifact_path,
+            current_active.artifact_path if current_active else None,
+        )
+        gate["report_path"] = self._save_gate_report(candidate.version, gate)
+        gate_summary = {
+            "promotion_allowed": gate["promotion_allowed"],
+            "blockers": gate["blockers"],
+            "warnings": gate.get("warnings", []),
+            "candidate": gate.get("candidate"),
+            "active": gate.get("active"),
+            "eval_rows": gate.get("eval_rows"),
+            "report_path": gate["report_path"],
+            "overridden": False,
+        }
+
+        if not gate["promotion_allowed"]:
+            if not override_gate:
+                self._audit(
+                    "model_promotion_blocked",
+                    candidate_model_id,
+                    {"version": candidate.version, "blockers": gate["blockers"], "actor": actor},
+                )
+                raise PromotionBlockedError(gate_summary)
+            gate_summary["overridden"] = True
+            self._audit(
+                "model_promotion_gate_overridden",
+                candidate_model_id,
+                {
+                    "version": candidate.version,
+                    "blockers": gate["blockers"],
+                    "override_reason": override_reason,
+                    "actor": actor,
+                },
+            )
 
         switch_active_model(candidate.artifact_path)
         self._repo.promote(candidate_model_id)
@@ -132,13 +193,30 @@ class ModelRegistryService:
                 action="model_promoted",
                 entity_type="model_version",
                 entity_id=candidate_model_id,
-                metadata={"active_model_id": active_model_id, "shadow_model_id": shadow_model_id},
+                metadata={
+                    "active_model_id": active_model_id,
+                    "shadow_model_id": shadow_model_id,
+                    "gate_overridden": gate_summary["overridden"],
+                    "actor": actor,
+                },
             )
         return {
             "message": "Candidate promoted to active model",
             "active_model_id": active_model_id,
             "shadow_model_id": shadow_model_id,
+            "validation": gate_summary,
         }
+
+    def _audit(self, action: str, entity_id: str, metadata: dict) -> None:
+        if self._audit_service is not None:
+            self._audit_service.log(action=action, entity_type="model_version", entity_id=entity_id, metadata=metadata)
+
+    def _save_gate_report(self, version: str, gate: dict) -> str:
+        self.validation_reports_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S%fZ")
+        path = self.validation_reports_dir / f"promotion_gate_{version}_{stamp}.json"
+        path.write_text(json.dumps(gate, indent=2, default=str), encoding="utf-8")
+        return str(path)
 
     def rollback(self, target_model_id: Optional[str] = None) -> dict:
         """Rollback to previous model."""
@@ -163,6 +241,33 @@ class ModelRegistryService:
             )
         return {
             "message": "Rollback completed",
+            "active_model_id": active_model_id,
+            "shadow_model_id": shadow_model_id,
+        }
+
+    def abort_canary(self, reason: str) -> dict:
+        """Stop a failing shadow/canary candidate without touching the active model.
+
+        Used by the automatic canary rollback. (rollback() demotes the *active*
+        model, which is the wrong action when the active model is the healthy
+        one and the shadow candidate is the one disagreeing.)
+        """
+        if not self._has_legacy:
+            return {"error": "Legacy repository not configured"}
+
+        rejected_id = self._repo.reject_shadow()
+        switch_shadow_model(None)
+        active_model_id, shadow_model_id = self._repo.state()
+        if self._audit_service is not None:
+            self._audit_service.log(
+                action="canary_rolled_back",
+                entity_type="model_version",
+                entity_id=rejected_id or "",
+                metadata={"reason": reason, "active_model_id": active_model_id},
+            )
+        return {
+            "message": "Canary rolled back; shadow candidate rejected",
+            "rejected_model_id": rejected_id,
             "active_model_id": active_model_id,
             "shadow_model_id": shadow_model_id,
         }

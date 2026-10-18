@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any  # Imported for clean static type coordination
 
 from fastapi import FastAPI
-import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.exception_handlers import register_exception_handlers
@@ -46,6 +45,7 @@ from services.job_service import JobService, SchedulerService
 from services.model_registry_service import ModelRegistryService
 from services.monitoring_service import MonitoringService
 from services.prediction_service import PredictionService
+from services.promotion_gate import PromotionGate
 from services.recommendation_service import RecommendationService
 from services.retraining_service import RetrainingOrchestrator
 from storage.factory import build_object_storage
@@ -122,7 +122,18 @@ def create_app() -> FastAPI:
         feedback_repo=feedback_repo,
         monitoring_repo=monitoring_repo,
     )
-    model_registry_service = ModelRegistryService(repo=model_registry_repo, audit_service=audit_service)
+    promotion_gate = PromotionGate(
+        eval_data_path=settings.promotion_eval_data_path,
+        decision_threshold=settings.decision_threshold,
+        min_auc=settings.promotion_min_auc,
+        min_precision=settings.promotion_min_precision,
+        min_recall=settings.promotion_min_recall,
+        min_f1=settings.promotion_min_f1,
+        max_auc_drop=settings.promotion_max_auc_drop,
+    )
+    model_registry_service = ModelRegistryService(
+        repo=model_registry_repo, audit_service=audit_service, promotion_gate=promotion_gate
+    )
     canary_service = CanaryRolloutService(
         enabled=settings.canary_enabled,
         traffic_percent=settings.canary_traffic_percent,

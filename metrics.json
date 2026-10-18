@@ -1,0 +1,13 @@
+{
+  "test_roc_auc": 0.8463574362551345,
+  "test_pr_auc": 0.6654992935898905,
+  "test_brier": 0.1349993314013399,
+  "test_log_loss": 0.41376014325438293,
+  "test_ece": 0.018245524954734745,
+  "cv_roc_auc_catboost": 0.8476175938733913,
+  "cv_roc_auc_logreg": 0.8484246625964132,
+  "decision_threshold": 0.38,
+  "test_flagged_pct_at_threshold": 0.3144073811213627,
+  "test_precision_at_threshold": 0.5801354401805869,
+  "test_recall_at_threshold": 0.6871657754010695
+}

@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class ModelVersionRecord(BaseModel):
@@ -22,6 +24,16 @@ class ShadowTestRequest(BaseModel):
 
 class PromoteModelRequest(BaseModel):
     candidate_model_id: str = Field(min_length=1)
+    # Admin escape hatch: promote despite gate blockers. Requires a reason and is
+    # recorded as a model_promotion_gate_overridden audit event.
+    override_gate: bool = False
+    override_reason: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _reason_required_for_override(self):
+        if self.override_gate and not (self.override_reason and self.override_reason.strip()):
+            raise ValueError("override_reason is required when override_gate is true")
+        return self
 
 
 class RollbackRequest(BaseModel):
@@ -38,3 +50,4 @@ class ModelMutationResponse(BaseModel):
     message: str
     active_model_id: str
     shadow_model_id: str | None
+    validation: dict[str, Any] | None = None  # set by /promote: the gate result

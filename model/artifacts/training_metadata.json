@@ -1,0 +1,66 @@
+{
+  "trained_at": "2026-10-18T13:57:42.220750+00:00",
+  "model": "catboost",
+  "class_weight": null,
+  "params": {
+    "depth": 4,
+    "learning_rate": 0.03,
+    "l2_leaf_reg": 10,
+    "bagging_temperature": 0,
+    "max_iterations": 3000,
+    "early_stopping_rounds": 100,
+    "seed": 42,
+    "class_weight": null
+  },
+  "best_iteration": 298,
+  "tree_count": 299,
+  "split": {
+    "train_rows": 4225,
+    "val_rows": 1409,
+    "test_rows": 1409,
+    "train_positive_rate": 0.26532544378698225,
+    "val_positive_rate": 0.2654364797728886,
+    "test_positive_rate": 0.2654364797728886,
+    "test_ids_fingerprint": "1ad8aefb7e34776a"
+  },
+  "calibration": {
+    "selected": "identity",
+    "selection_metric": "log_loss",
+    "cross_fitted_on_validation": {
+      "identity": {
+        "roc_auc": 0.8405590431165879,
+        "pr_auc": 0.654115642844306,
+        "brier": 0.1361774113133999,
+        "log_loss": 0.42175836849183823
+      },
+      "platt": {
+        "roc_auc": 0.8400268671368415,
+        "pr_auc": 0.6531225524236384,
+        "brier": 0.1363950966411371,
+        "log_loss": 0.4221518430145449
+      },
+      "isotonic": {
+        "roc_auc": 0.8326513213981244,
+        "pr_auc": 0.6332312940124518,
+        "brier": 0.13810184801702477,
+        "log_loss": 0.47040323390470623
+      }
+    },
+    "platt_fit_on_validation": {
+      "a": 0.9800222530751125,
+      "b": 0.014273827704377696
+    }
+  },
+  "validation_raw": {
+    "roc_auc": 0.8405590431165879,
+    "pr_auc": 0.654115642844306,
+    "brier": 0.1361774113133999,
+    "log_loss": 0.42175836849183823
+  },
+  "validation_calibrated_in_sample": {
+    "roc_auc": 0.8405590431165879,
+    "pr_auc": 0.654115642844306,
+    "brier": 0.1361774113133999,
+    "log_loss": 0.42175836849183823
+  }
+}

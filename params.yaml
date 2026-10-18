@@ -1,0 +1,96 @@
+# Single source of truth for the training / evaluation / threshold scripts in
+# model/training/. Nothing in here was tuned on the held-out test split.
+
+data:
+  path: data/Telco-Customer-Churn.csv
+  target: Churn
+  positive_label: "Yes"
+  # customerID is an identifier; gender is excluded from the model on purpose.
+  drop_columns: [customerID, gender]
+
+split:
+  # 60 / 20 / 20 stratified. The first cut (test) reproduces the historical
+  # 80/20 split exactly, so old and new test numbers refer to the same rows.
+  test_size: 0.20
+  val_size: 0.20
+  seed: 42
+
+cv:
+  folds: 5
+  seed: 42
+  # Inside each CV fold, the gradient-boosting models early-stop on this share
+  # of the fold's training rows (never on the fold's scoring rows).
+  inner_early_stopping_size: 0.15
+
+bootstrap:
+  n_resamples: 2000
+  seed: 0
+
+models:
+  catboost:
+    depth: 4
+    learning_rate: 0.03
+    l2_leaf_reg: 10
+    bagging_temperature: 0
+    max_iterations: 3000
+    early_stopping_rounds: 100
+    seed: 42
+    # null = no class weighting (shipped). The comparison also reports the old
+    # "balanced" weighting (negatives / positives) to justify dropping it.
+    class_weight: null
+  lightgbm:
+    learning_rate: 0.03
+    num_leaves: 15
+    min_child_samples: 40
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.8
+    reg_lambda: 5.0
+    max_iterations: 3000
+    early_stopping_rounds: 100
+    seed: 42
+  logistic_regression:
+    C: 1.0
+    max_iter: 2000
+
+calibration:
+  # Candidates compared by cross-fitting on the validation split; the one with
+  # the lowest mean log loss is refit on the whole validation split and shipped.
+  methods: [identity, platt, isotonic]
+  folds: 5
+  seed: 42
+  selection_metric: log_loss
+  reliability_bins: 10
+
+threshold:
+  # Economics are ASSUMPTIONS, not measured business data.
+  horizon_months: 12
+  primary_scenario: margin_with_incentive
+  scenarios:
+    margin_with_incentive: {offer_cost: 50.0, save_rate: 0.30, margin: 0.5}
+    revenue_cheap: {offer_cost: 20.0, save_rate: 0.30, margin: 1.0}
+  grid_start: 0.05
+  grid_stop: 0.95
+  grid_step: 0.01
+  sensitivity_offer_cost: [25, 50, 100]
+  sensitivity_save_rate: [0.1, 0.3, 0.5]
+
+evaluation:
+  # Must equal the API default (backend/core/settings.py decision_threshold);
+  # a test enforces this. Used for the at-threshold rows and the slice report.
+  decision_threshold: 0.38
+
+slices:
+  columns: [SeniorCitizen, TenureGroup, Contract, InternetService]
+  # A slice is flagged when it differs from the overall test value by more than
+  # these amounts (and has at least min_rows rows).
+  min_rows: 50
+  max_auc_gap: 0.05
+  max_calibration_gap: 0.05
+  max_recall_gap: 0.15
+
+output:
+  model_path: model/artifacts/catboost_churn.cbm
+  calibration_path: model/artifacts/catboost_churn.calibration.json
+  training_metadata_path: model/artifacts/training_metadata.json
+  metrics_path: metrics.json
