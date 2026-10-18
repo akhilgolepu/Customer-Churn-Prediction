@@ -241,7 +241,8 @@ class ModelRuntimeManager:
                 return None
             proba = self._shadow_model.predict_proba(features)
             calibrator = self._shadow_calibrator
-        assert calibrator is not None  # set together with the shadow model
+        if calibrator is None:  # set together with the shadow model; explicit check, not assert (python -O)
+            raise RuntimeError("shadow model loaded without a calibrator")
         return float(calibrator.transform(proba[0]))
 
     def explain_active(self, df):

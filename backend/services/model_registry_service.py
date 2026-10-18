@@ -53,7 +53,8 @@ class ModelRegistryService:
     @property
     def _r(self) -> "ModelRegistryRepository":
         # Only reached after a _has_legacy check; narrows Optional for type checking.
-        assert self._repo is not None, "model registry repository is not configured"
+        if self._repo is None:
+            raise RuntimeError("model registry repository is not configured")
         return self._repo
 
     def list_registry(self) -> dict:
