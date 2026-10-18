@@ -61,7 +61,7 @@ class RecommendationService:
         return "high"
 
     async def recommend(self, customer: PredictionRequest, budget: float) -> dict:
-        prediction = await self._prediction_service.predict(customer, threshold=0.5)
+        prediction = await self._prediction_service.predict(customer)
         explanation = await self._prediction_service.explain(customer)
 
         drivers = explanation.get("top_drivers", [])

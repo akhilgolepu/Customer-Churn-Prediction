@@ -17,7 +17,8 @@ class CanaryRolloutService:
         max_disagreement_rate: float,
         rollback_cooldown_seconds: int,
     ) -> None:
-        self._enabled = enabled
+        self._configured_enabled = bool(enabled)
+        self._enabled = bool(enabled)
         self._traffic_percent = max(0, min(100, int(traffic_percent)))
         self._min_samples = max(1, int(min_samples))
         self._max_disagreement_rate = float(max_disagreement_rate)
@@ -25,7 +26,8 @@ class CanaryRolloutService:
 
         self._lock = Lock()
         self._total = 0
-        self._canary_samples = 0
+        self._canary_samples = 0  # requests actually served by the shadow model
+        self._compared = 0  # requests where active and shadow were both scored
         self._disagreements = 0
         self._last_rollback_at: float | None = None
         self._last_rollback_reason: str | None = None
@@ -33,6 +35,19 @@ class CanaryRolloutService:
     @property
     def enabled(self) -> bool:
         return self._enabled
+
+    def reset(self) -> None:
+        """Start fresh counters for a new shadow candidate.
+
+        Re-enables the canary if it was enabled by configuration (an automatic
+        rollback disables it for the rest of that candidate's life).
+        """
+        with self._lock:
+            self._enabled = self._configured_enabled
+            self._total = 0
+            self._canary_samples = 0
+            self._compared = 0
+            self._disagreements = 0
 
     def choose_variant(self, prediction_id: str) -> str:
         if not self._enabled or self._traffic_percent <= 0:
@@ -62,13 +77,18 @@ class CanaryRolloutService:
             if variant == "shadow":
                 self._canary_samples += 1
 
+            # The shadow model scores every request, so disagreement is measured
+            # over every compared request. (It used to be divided by the number
+            # of requests *served* by the shadow, which is only canary_traffic_percent
+            # of the total, so the rate was inflated and could exceed 100%.)
+            self._compared += 1
             active_label = active_probability >= threshold
             shadow_label = shadow_probability >= threshold
             disagreement = active_label != shadow_label
             if disagreement:
                 self._disagreements += 1
 
-            disagreement_rate = self._disagreements / self._canary_samples if self._canary_samples else 0.0
+            disagreement_rate = self._disagreements / self._compared
             rollback_triggered = self._should_rollback(disagreement_rate)
             if rollback_triggered:
                 self._last_rollback_at = time.time()
@@ -84,7 +104,7 @@ class CanaryRolloutService:
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
-            disagreement_rate = self._disagreements / self._canary_samples if self._canary_samples else 0.0
+            disagreement_rate = self._disagreements / self._compared if self._compared else 0.0
             return {
                 "enabled": self._enabled,
                 "traffic_percent": self._traffic_percent,
@@ -92,6 +112,7 @@ class CanaryRolloutService:
                 "max_disagreement_rate": self._max_disagreement_rate,
                 "total_predictions": self._total,
                 "canary_samples": self._canary_samples,
+                "compared_samples": self._compared,
                 "disagreements": self._disagreements,
                 "disagreement_rate": disagreement_rate,
                 "last_rollback_at": self._last_rollback_at,
@@ -105,7 +126,7 @@ class CanaryRolloutService:
     def _should_rollback(self, disagreement_rate: float) -> bool:
         if not self._enabled:
             return False
-        if self._canary_samples < self._min_samples:
+        if self._compared < self._min_samples:
             return False
         if disagreement_rate <= self._max_disagreement_rate:
             return False

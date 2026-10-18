@@ -68,7 +68,9 @@ class PredictionService:
             raise last_exc
         raise RuntimeError("Unknown dependency failure")
 
-    async def predict(self, request: PredictionRequest, threshold: float) -> dict:
+    async def predict(self, request: PredictionRequest, threshold: float | None = None) -> dict:
+        if threshold is None:
+            threshold = get_settings().decision_threshold
         df = engineer_features(request)
         active_probability = float(await self._run_with_resilience(lambda: predict_proba(df)))
         shadow_probability = await self._run_with_resilience(lambda: predict_shadow_proba(df))
@@ -86,18 +88,24 @@ class PredictionService:
             variant = str(canary_eval.get("variant", "active"))
             rollback_triggered = bool(canary_eval.get("rollback_triggered", False))
 
+        if rollback_triggered:
+            # Never serve the candidate that just failed the canary.
+            variant = "active"
+
         probability = active_probability
         if variant == "shadow" and shadow_probability is not None:
             probability = float(shadow_probability)
 
         if rollback_triggered and self._model_registry_service is not None:
             try:
-                self._model_registry_service.rollback()
-                if self._canary_service is not None:
-                    self._canary_service.disable()
+                reason = (self._canary_service.snapshot().get("last_rollback_reason") if self._canary_service else None) or "canary disagreement"
+                self._model_registry_service.abort_canary(reason)
             except Exception:   # nosec B110
                 # Rollback attempts should not fail prediction path.
                 pass
+            finally:
+                if self._canary_service is not None:
+                    self._canary_service.disable()
 
         is_churn = probability >= threshold
 

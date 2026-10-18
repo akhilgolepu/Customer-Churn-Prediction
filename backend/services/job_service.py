@@ -193,7 +193,7 @@ class JobService:
         for _, row in frame.iterrows():
             row_payload: dict[str, Any] = {str(key): value for key, value in row.to_dict().items()}
             payload = PredictionRequest(**row_payload)
-            prediction = await self._prediction_service.predict(payload, threshold=0.5)
+            prediction = await self._prediction_service.predict(payload)
             tier = self._risk_tier(float(prediction["probability"]))
             prediction["riskTier"] = tier
             risk_counts[tier] += 1

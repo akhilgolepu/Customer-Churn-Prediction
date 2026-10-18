@@ -16,7 +16,7 @@ router = APIRouter(prefix="/predictions", tags=["predictions"])
 @router.post("/predict", response_model=PredictionResponse)
 async def predict(
     payload: PredictionRequest,
-    threshold: float = Query(default=0.5, ge=0.0, le=1.0),
+    threshold: float | None = Query(default=None, ge=0.0, le=1.0, description="Defaults to settings.decision_threshold"),
     prediction_service=Depends(get_prediction_service),
 ):
     return await prediction_service.predict(payload, threshold=threshold)
