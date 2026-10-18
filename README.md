@@ -409,6 +409,14 @@ make setup test lint train demo loadtest up down   # same, where make exists
 `.devcontainer/devcontainer.json`: Python 3.13, Node 20, Docker CLI against the host daemon;
 `postCreateCommand` runs `tasks.py setup --frontend`.
 
+Checked from a fresh `git clone` of the pushed branch (no dataset, no venv): `python tasks.py setup`
+took 6 min 27 s, then `python tasks.py test` gave 149 passed, 1 skipped (the full-dataset check) and
+`python tasks.py lint` was clean. **`python tasks.py up` from that clone was not verified**: Docker Hub
+pulls hung on this machine at the time. The same compose file built and ran from the working copy
+(API, Prometheus, Grafana, Postgres), but the **frontend container was never built** in this pass.
+The frontend image now gets `VITE_API_URL` as a build argument (default `http://localhost:8000`)
+instead of relying on the committed `frontend/.env`, which the security notes say to untrack.
+
 ## Bugs found during the MLOps pass
 
 Each is fixed and covered by a regression test (named in brackets) unless noted.
