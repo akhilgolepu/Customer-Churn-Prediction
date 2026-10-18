@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import json
 from pathlib import Path
 import shutil
@@ -15,6 +16,7 @@ from model.linear_model import LinearChurnModel
 from storage.factory import build_object_storage
 
 _BASE_DIR = Path(__file__).parent.parent
+logger = logging.getLogger(__name__)
 MODEL_PATH = Path(get_settings().model_path)
 
 
@@ -66,9 +68,9 @@ class ModelRuntimeManager:
         self._active_model.prepare_explainer()
         self._active_model_path = str(default_model_path)
         self._active_bundle_dir: Path | None = None
-        self._shadow_model = None
+        self._shadow_model: _CatBoostAdapter | _LinearAdapter | None = None
         self._shadow_calibrator: Calibrator | None = None
-        self._shadow_model_path = None
+        self._shadow_model_path: str | None = None
         self._shadow_bundle_dir: Path | None = None
 
     def _sha256_file(self, path: Path) -> str:
@@ -89,9 +91,23 @@ class ModelRuntimeManager:
             return Path(artifact_path.replace("file://", "", 1))
 
         model_path = Path(artifact_path)
-        if model_path.is_absolute():
-            return model_path
-        return (_BASE_DIR / model_path).resolve()
+        resolved = model_path if model_path.is_absolute() else (_BASE_DIR / model_path).resolve()
+        # (On Linux a Windows path such as "G:\..." is not absolute and lands here too.)
+        return resolved if resolved.exists() else self._relocate(artifact_path, resolved)
+
+    def _relocate(self, artifact_path: str, model_path: Path) -> Path:
+        """An absolute path recorded on another machine (e.g. a registry seeded on Windows
+        and mounted into a Linux container): map ".../model/artifacts/<rest>" onto this
+        checkout when that file exists. Otherwise return the path unchanged (and let
+        the caller report it missing)."""
+        normalized = artifact_path.replace("\\", "/")
+        marker = "/model/artifacts/"
+        if marker in normalized:
+            candidate = (_BASE_DIR / "model" / "artifacts" / normalized.split(marker, 1)[1]).resolve()
+            if candidate.exists():
+                logger.warning("Artifact %s not found; using %s from this checkout", artifact_path, candidate)
+                return candidate
+        return model_path
 
     def _cleanup_bundle_dir(self, bundle_dir: Path | None) -> None:
         if bundle_dir and bundle_dir.exists():
@@ -143,6 +159,12 @@ class ModelRuntimeManager:
         return model_path, bundle_dir
 
     def _resolve_model_artifact(self, artifact_path: str) -> tuple[Path, Path | None]:
+        if artifact_path.startswith(("models:/", "runs:/")):
+            # MLflow registry/run URI (model/tracking.py). Needs mlflow installed,
+            # which the slim API image is not; use a file/s3 path there.
+            from model.tracking import download_model_dir
+
+            return download_model_dir(artifact_path)
         resolved_path = self._resolve_artifact(artifact_path)
         if resolved_path.suffix.lower() == ".zip":
             model_path, bundle_dir = self._resolve_model_from_bundle(resolved_path)
@@ -156,6 +178,7 @@ class ModelRuntimeManager:
         A bundle keeps the calibration at model/calibration.json, a loose artifact
         next to it as <name>.calibration.json. Without one the raw score is served
         (identity), which is how pre-calibration artifacts behave."""
+        model: _CatBoostAdapter | _LinearAdapter
         if LinearChurnModel.is_linear_artifact(model_path):
             model = _LinearAdapter(LinearChurnModel.load(model_path))
         else:
@@ -218,6 +241,7 @@ class ModelRuntimeManager:
                 return None
             proba = self._shadow_model.predict_proba(features)
             calibrator = self._shadow_calibrator
+        assert calibrator is not None  # set together with the shadow model
         return float(calibrator.transform(proba[0]))
 
     def explain_active(self, df):

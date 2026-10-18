@@ -1,3 +1,4 @@
+from typing import Any
 import math
 
 from core.settings import get_settings
@@ -18,6 +19,18 @@ class MonitoringService:
         self._monitoring_repo = monitoring_repo
 
     @staticmethod
+    def _input_value(inputs: dict, field: str) -> float | None:
+        """Numeric monitoring signal from a stored request. TotalServices is engineered
+        (not part of the request), so it is derived here; it used to be looked up in
+        the raw inputs, never found, and reported as a constant 0."""
+        if field == "TotalServices":
+            addons = ["OnlineSecurity", "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies"]
+            if not all(a in inputs for a in addons):
+                return None
+            return float(sum(inputs[a] == "Yes" for a in addons))
+        return float(inputs[field]) if field in inputs else None
+
+    @staticmethod
     def _mean(values: list[float]) -> float:
         return sum(values) / len(values) if values else 0.0
 
@@ -29,7 +42,12 @@ class MonitoringService:
 
     def snapshot(self) -> dict:
         settings = get_settings()
-        predictions, _ = self._prediction_repo.list_paginated(page=1, page_size=5000, is_churn=None)
+        # Latest 5,000 predictions, oldest first. (It used page 1 of list_paginated,
+        # whose order differs by backend: the oldest 5,000 forever in SQLite mode, so
+        # monitoring froze, and newest-first on Postgres, so baseline and recent
+        # windows were swapped and drift deltas had the wrong sign.)
+        predictions = self._prediction_repo.recent(5000)
+        payload: dict[str, Any]
         if len(predictions) < 10:
             payload = {
                 "input_drift": [],
@@ -61,8 +79,8 @@ class MonitoringService:
         alerts: list[str] = []
 
         for field in numeric_fields:
-            base_values = [float(item.inputs.get(field, 0.0)) for item in baseline if field in item.inputs]
-            recent_values = [float(item.inputs.get(field, 0.0)) for item in recent if field in item.inputs]
+            base_values = [v for v in (self._input_value(item.inputs, field) for item in baseline) if v is not None]
+            recent_values = [v for v in (self._input_value(item.inputs, field) for item in recent) if v is not None]
             base_mean = self._mean(base_values)
             recent_mean = self._mean(recent_values)
             delta = self._delta_ratio(base_mean, recent_mean)

@@ -16,6 +16,10 @@ lifecycle code). Traffic is real customer rows replayed from the held-out split.
 Usage:
     python model/training/build_demo_candidates.py      # once
     python scripts/demo_shadow_rollback.py [--out docs/demo_shadow_rollback.md]
+
+    # Against a running server (e.g. docker compose with CANARY_ENABLED=true),
+    # pacing requests so Prometheus/Grafana can see the rollback happen:
+    python scripts/demo_shadow_rollback.py --base-url http://localhost:8000 --delay 0.05
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -107,45 +112,50 @@ def show_registry(client, headers, title):
     return reg
 
 
-def replay(client, rows, start, stop, label):
-    """Send rows[start:stop]; stop early if a rollback is recorded."""
-    disagree_seen = 0
+def replay(client, headers, rows, start, stop, label, delay=0.0):
+    """Send rows[start:stop]; stop early once the API reports a rollback."""
     for i in range(start, min(stop, len(rows))):
         r = client.post("/api/v1/predictions/predict", json=rows[i])
         assert r.status_code == 200, r.text
-        body = r.json()
-        if body.get("shadowProbability") is not None:
-            pass
-        s = client.app.state.canary_service.snapshot()
-        if s["last_rollback_at"] is not None and not client.app.state.canary_service.enabled:
+        s = snap(client, headers)
+        if s["last_rollback_at"] is not None and not s["enabled"]:
             say(f"- {label}: canary auto-rolled back after **{i - start + 1}** requests")
             return i + 1, True
+        if delay:
+            time.sleep(delay)
     return min(stop, len(rows)), False
 
 
-def main(out: Path | None) -> int:
+def main(out: Path | None, base_url: str | None = None, delay: float = 0.0) -> int:
     cand = json.loads((REPO_ROOT / "model" / "artifacts" / "demo" / "demo_candidates.json").read_text())
     rows = payloads()
 
     say("# Shadow -> canary -> rollback demo")
     say()
-    say(
-        f"Config: canary traffic {TRAFFIC_PERCENT}%, min samples {MIN_SAMPLES}, "
-        f"max disagreement {MAX_DISAGREEMENT:.0%}, decision threshold "
-        f"{get_settings().decision_threshold}. "
-        f"Traffic: {len(rows)} held-out customer rows replayed through `POST /api/v1/predictions/predict`."
-    )
-    say()
 
-    with TestClient(create_app()) as client:
+    if base_url:
+        import httpx
+
+        client_ctx = httpx.Client(base_url=base_url, timeout=60)
+    else:
+        client_ctx = TestClient(create_app())
+    with client_ctx as client:
         # Development default unless ADMIN_PASSWORD is set (see services/auth_service.py).
         admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
         tok = client.post("/api/v1/auth/login", json={"username": "admin", "password": admin_password}).json()["access_token"]
         h = {"Authorization": f"Bearer {tok}"}
+        cfg = snap(client, h)  # the server's own canary settings
+        say(
+            f"Server: {base_url or 'in-process TestClient'}. Config: canary traffic {cfg['traffic_percent']}%, "
+            f"min samples {cfg['min_samples']}, max disagreement {cfg['max_disagreement_rate']:.0%}, "
+            f"decision threshold {get_settings().decision_threshold if not base_url else 'server default'}. "
+            f"Traffic: {len(rows)} held-out customer rows replayed through `POST /api/v1/predictions/predict`."
+        )
+        say()
 
         say("## 1. Baseline")
         say()
-        reg0 = show_registry(client, h, "Registry at start")
+        show_registry(client, h, "Registry at start")
 
         say("## 2. Healthy retrain (v2): shadow, then promote")
         say()
@@ -156,7 +166,7 @@ def main(out: Path | None) -> int:
             headers=h,
         ).json()
         client.post("/api/v1/models/shadow", json={"candidate_model_id": v2["id"]}, headers=h)
-        pos, rolled = replay(client, rows, 0, 400, "v2")
+        pos, rolled = replay(client, h, rows, 0, 400, "v2", delay)
         s = snap(client, h)
         say(
             f"- v2 shadowed on {pos} requests: {s['disagreements']} label disagreements, "
@@ -194,7 +204,7 @@ def main(out: Path | None) -> int:
         say()
         client.post("/api/v1/models/shadow", json={"candidate_model_id": v3["id"]}, headers=h)
         show_registry(client, h, "Registry with v3 in shadow")
-        pos, rolled = replay(client, rows, 400, 400 + 600, "v3")
+        pos, rolled = replay(client, h, rows, 400, 400 + 600, "v3", delay)
         s = snap(client, h)
         say(
             f"- v3 canary: {s['canary_samples']} requests served by the candidate, "
@@ -233,4 +243,7 @@ def main(out: Path | None) -> int:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=None)
-    sys.exit(main(ap.parse_args().out))
+    ap.add_argument("--base-url", default=None, help="run against a live server instead of in-process")
+    ap.add_argument("--delay", type=float, default=0.0, help="seconds between requests")
+    args = ap.parse_args()
+    sys.exit(main(args.out, args.base_url, args.delay))

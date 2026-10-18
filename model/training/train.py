@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +37,7 @@ from common import (  # noqa: E402
 
 import numpy as np  # noqa: E402
 
+from model import tracking  # noqa: E402
 from model.calibration import Calibrator, calibration_path_for, cross_fit  # noqa: E402
 from model.linear_model import LinearChurnModel  # noqa: E402
 
@@ -75,6 +77,39 @@ def train_challenger(ds, split, params) -> dict:
         "calibration": {"selected": method, "cross_fitted_on_validation": table},
         "validation_calibrated_in_sample": val,
     }
+
+
+def _flatten(prefix: str, d: dict) -> dict:
+    out = {}
+    for k, v in d.items():
+        key = f"{prefix}.{k}" if prefix else k
+        out.update(_flatten(key, v) if isinstance(v, dict) else {key: v})
+    return out
+
+
+def log_to_mlflow(params: dict, metadata: dict) -> dict:
+    """Log the run and register both models in the MLflow registry (model/tracking.py)."""
+    import mlflow
+
+    out = params["output"]
+    # Read before mlflow.set_tracking_uri(), which exports MLFLOW_TRACKING_URI in-process.
+    store = "$MLFLOW_TRACKING_URI" if os.environ.get("MLFLOW_TRACKING_URI") else "sqlite:///mlflow.db (repo root)"
+    with tracking.start_run("train") as run:
+        mlflow.log_params({k: v for k, v in _flatten("", {k: params[k] for k in ("split", "models", "calibration")}).items()})
+        mlflow.log_metrics({f"val_{k}": v for k, v in metadata["validation_calibrated_in_sample"].items()})
+        mlflow.log_metrics({f"challenger_val_{k}": v for k, v in metadata["challenger"]["validation_calibrated_in_sample"].items()})
+        mlflow.log_metric("best_iteration", metadata["best_iteration"])
+        mlflow.set_tags({"calibration": metadata["calibration"]["selected"],
+                         "test_ids_fingerprint": metadata["split"]["test_ids_fingerprint"]})
+        cb_version = tracking.log_and_register(REPO_ROOT / out["model_path"], tracking.CATBOOST_MODEL_NAME, "catboost")
+        lr_version = tracking.log_and_register(REPO_ROOT / out["challenger_path"], tracking.CHALLENGER_MODEL_NAME, "challenger")
+        return {
+            # Not the absolute URI: this file is committed and paths are machine-specific.
+            "tracking_store": store,
+            "run_id": run.info.run_id,
+            "catboost_model_uri": f"models:/{tracking.CATBOOST_MODEL_NAME}/{cb_version}",
+            "challenger_model_uri": f"models:/{tracking.CHALLENGER_MODEL_NAME}/{lr_version}",
+        }
 
 
 def main() -> None:
@@ -130,10 +165,11 @@ def main() -> None:
         "validation_calibrated_in_sample": prob_metrics(y_val, calibrator.transform(raw_val)),
         "challenger": train_challenger(ds, split, params),
     }
+    metadata["mlflow"] = log_to_mlflow(params, metadata)
     meta_path = REPO_ROOT / out["training_metadata_path"]
     meta_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-    print(json.dumps({k: metadata[k] for k in ("best_iteration", "tree_count", "split", "calibration", "challenger")}, indent=2))
+    print(json.dumps({k: metadata[k] for k in ("best_iteration", "tree_count", "split", "calibration", "challenger", "mlflow")}, indent=2))
     print(f"Wrote {model_path.relative_to(REPO_ROOT)}, {out['calibration_path']}, {out['training_metadata_path']}")
 
 

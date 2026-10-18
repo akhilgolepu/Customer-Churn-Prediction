@@ -7,7 +7,7 @@ from core.settings import get_settings
 try:
     import redis
 except Exception:  # pragma: no cover
-    redis = None
+    redis = None  # type: ignore[assignment]
 
 
 class CacheClient:
@@ -49,7 +49,7 @@ class CacheClient:
     def get_json(self, key: str) -> dict | None:
         if self._redis:
             data = self._redis.get(key)
-            return json.loads(data) if data else None
+            return json.loads(str(data)) if data else None
 
         item = self._local_kv.get(key)
         if not item:

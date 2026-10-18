@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-10-18T14:27:29.976011+00:00",
+  "trained_at": "2026-10-18T17:11:54.061649+00:00",
   "model": "catboost",
   "class_weight": null,
   "params": {
@@ -96,5 +96,11 @@
       "brier": 0.1368032796687999,
       "log_loss": 0.42365719547861475
     }
+  },
+  "mlflow": {
+    "tracking_store": "sqlite:///mlflow.db (repo root)",
+    "run_id": "8189c3bc97b84ac283228943e0ff4283",
+    "catboost_model_uri": "models:/churn-catboost/2",
+    "challenger_model_uri": "models:/churn-logreg-challenger/2"
   }
 }

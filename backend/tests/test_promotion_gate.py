@@ -169,8 +169,23 @@ def _register(client, headers, version="v2"):
     return client.post("/api/v1/models/register", json=body, headers=headers).json()
 
 
+def _audit_records(client):
+    """(action, metadata) for every audit event, from the in-memory (SQLite mode)
+    or the Postgres audit repository."""
+    repo = client.app.state.audit_service._repo
+    if hasattr(repo, "_records"):
+        return [(r.action, r.metadata) for r in repo._records]
+    from sqlalchemy import select
+
+    from db.models import AuditLog
+
+    with client.app.state.postgres_session_factory.session_scope() as session:
+        rows = session.execute(select(AuditLog).order_by(AuditLog.event_at)).scalars().all()
+        return [(r.action, r.metadata_json) for r in rows]
+
+
 def _audit_actions(client):
-    return [r.action for r in client.app.state.audit_service._repo._records]
+    return [action for action, _ in _audit_records(client)]
 
 
 def test_app_wires_a_real_promotion_gate(client):
@@ -230,13 +245,13 @@ def test_override_promotes_and_is_audit_logged(client):
 
     assert r.status_code == 200, r.text
     assert r.json()["validation"]["overridden"] is True
-    records = client.app.state.audit_service._repo._records
-    override = next(rec for rec in records if rec.action == "model_promotion_gate_overridden")
-    assert override.metadata["override_reason"] == "hotfix approved by on-call"
-    assert override.metadata["actor"] == "admin"
-    assert override.metadata["blockers"] == ["Model quality metrics below thresholds"]
-    promoted = next(rec for rec in records if rec.action == "model_promoted")
-    assert promoted.metadata["gate_overridden"] is True
+    records = _audit_records(client)
+    override = next(meta for action, meta in records if action == "model_promotion_gate_overridden")
+    assert override["override_reason"] == "hotfix approved by on-call"
+    assert override["actor"] == "admin"
+    assert override["blockers"] == ["Model quality metrics below thresholds"]
+    promoted = next(meta for action, meta in records if action == "model_promoted")
+    assert promoted["gate_overridden"] is True
 
 
 def test_promote_still_requires_admin(client):

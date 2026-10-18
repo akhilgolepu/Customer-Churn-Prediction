@@ -346,6 +346,20 @@ def write_slices_md(path, report):
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def log_evaluation(params: dict, metrics: dict) -> None:
+    """Log test metrics as an MLflow run linked to the training run that made the model."""
+    import mlflow
+
+    from model import tracking
+
+    meta = json.loads((REPO_ROOT / params["output"]["training_metadata_path"]).read_text(encoding="utf-8"))
+    with tracking.start_run("evaluate"):
+        mlflow.log_metrics({k: float(v) for k, v in metrics.items()})
+        mlflow.set_tag("train_run_id", meta.get("mlflow", {}).get("run_id", "unknown"))
+        for doc in ("model_comparison.md", "slice_metrics.md", "reliability_diagram.png"):
+            mlflow.log_artifact(str(DOCS / doc))
+
+
 def main() -> None:
     params = load_params()
     ds = load_dataset(params)
@@ -422,6 +436,7 @@ def main() -> None:
            if k != "threshold"},
     }
     (REPO_ROOT / params["output"]["metrics_path"]).write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    log_evaluation(params, metrics)
     print(json.dumps({"cv_roc_auc": {k: round(v["roc_auc"]["mean"], 4) for k, v in cv_summary.items()},
                       "shipped_test": evaluation["shipped_test"]}, indent=2))
     print("Wrote docs/model_comparison.md, docs/slice_metrics.md, docs/reliability_diagram.png, docs/evaluation.json, metrics.json")

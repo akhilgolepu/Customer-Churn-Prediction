@@ -29,3 +29,17 @@ node_modules/
 # OS/editor noise
 .DS_Store
 Thumbs.db
+# MLflow local store (model/tracking.py)
+mlflow.db
+mlartifacts/
+mlruns/
+# Playwright MCP session files
+.playwright-mcp/
+# Outputs of the retraining job and local tooling
+model/artifacts/retrained/auto_*/
+model/artifacts/bundles/churn_pipeline_auto_*.zip
+catboost_info/
+.coverage
+coverage.xml
+pytest.xml
+loadtest/results/

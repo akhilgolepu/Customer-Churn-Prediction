@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from model.data_schema import TRAINING_SCHEMA, load_raw_training_csv, validate_frame  # noqa: E402
 from model.preprocessing.preprocessing import load_artifacts, prepare_for_model, preprocess  # noqa: E402
 
 PARAMS_PATH = REPO_ROOT / "params.yaml"
@@ -41,8 +42,10 @@ class Dataset:
 
 def load_dataset(params: dict) -> Dataset:
     cfg = params["data"]
-    df = pd.read_csv(REPO_ROOT / cfg["path"])
-    df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+    df = load_raw_training_csv(REPO_ROOT / cfg["path"])
+    errors = validate_frame(df, TRAINING_SCHEMA)
+    if errors:
+        raise ValueError("Training data failed validation:\n  " + "\n  ".join(errors))
     y = (df[cfg["target"]] == cfg["positive_label"]).astype(int)
     raw = df.drop(columns=[cfg["target"]])
     feature_list, cat_cols = load_artifacts()

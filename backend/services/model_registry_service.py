@@ -23,7 +23,7 @@ try:
 except ImportError:
     HAS_LEGACY_DEPS = False
 
-from backend.services.model_validation_service import ModelValidationGate
+from services.model_validation_service import ModelValidationGate
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +50,18 @@ class ModelRegistryService:
         self.validation_gate = ModelValidationGate()
         self._has_legacy = HAS_LEGACY_DEPS and repo is not None
 
+    @property
+    def _r(self) -> "ModelRegistryRepository":
+        # Only reached after a _has_legacy check; narrows Optional for type checking.
+        assert self._repo is not None, "model registry repository is not configured"
+        return self._repo
+
     def list_registry(self) -> dict:
         """List all registered models."""
         if not self._has_legacy:
             return {"error": "Legacy repository not configured"}
 
-        active_model_id, shadow_model_id = self._repo.state()
+        active_model_id, shadow_model_id = self._r.state()
         versions = [
             {
                 "id": item.id,
@@ -65,7 +71,7 @@ class ModelRegistryService:
                 "status": item.status,
                 "created_at": item.created_at,
             }
-            for item in self._repo.list_versions()
+            for item in self._r.list_versions()
         ]
         return {
             "active_model_id": active_model_id,
@@ -78,7 +84,7 @@ class ModelRegistryService:
         if not self._has_legacy:
             return {"error": "Legacy repository not configured"}
 
-        item = self._repo.register_candidate(version=version, metrics=metrics, artifact_path=artifact_path)
+        item = self._r.register_candidate(version=version, metrics=metrics, artifact_path=artifact_path)
         if self._audit_service is not None:
             self._audit_service.log(
                 action="model_registered",
@@ -100,13 +106,13 @@ class ModelRegistryService:
         if not self._has_legacy:
             return {"error": "Legacy repository not configured"}
 
-        candidate = self._repo.get(candidate_model_id)
+        candidate = self._r.get(candidate_model_id)
         if candidate is None:
             raise NotFoundError("Candidate model not found")
 
         switch_shadow_model(candidate.artifact_path)
-        self._repo.set_shadow(candidate_model_id)
-        active_model_id, shadow_model_id = self._repo.state()
+        self._r.set_shadow(candidate_model_id)
+        active_model_id, shadow_model_id = self._r.state()
         if self._audit_service is not None:
             self._audit_service.log(
                 action="model_shadow_enabled",
@@ -138,14 +144,14 @@ class ModelRegistryService:
         if self._promotion_gate is None:
             raise AppError("gate_not_configured", "Promotion gate is not configured", status_code=500)
 
-        candidate = self._repo.get(candidate_model_id)
+        candidate = self._r.get(candidate_model_id)
         if candidate is None:
             raise NotFoundError("Candidate model not found")
         if override_gate and not (override_reason and override_reason.strip()):
             raise AppError("override_reason_required", "override_gate requires a non-empty override_reason", 422)
 
-        current_active_id, _ = self._repo.state()
-        current_active = self._repo.get(current_active_id) if current_active_id else None
+        current_active_id, _ = self._r.state()
+        current_active = self._r.get(current_active_id) if current_active_id else None
         gate = self._promotion_gate.evaluate(
             candidate.version,
             candidate.artifact_path,
@@ -184,8 +190,8 @@ class ModelRegistryService:
             )
 
         switch_active_model(candidate.artifact_path)
-        self._repo.promote(candidate_model_id)
-        active_model_id, shadow_model_id = self._repo.state()
+        self._r.promote(candidate_model_id)
+        active_model_id, shadow_model_id = self._r.state()
         if shadow_model_id is None:
             switch_shadow_model(None)
         if self._audit_service is not None:
@@ -223,9 +229,9 @@ class ModelRegistryService:
         if not self._has_legacy:
             return {"error": "Legacy repository not configured"}
 
-        self._repo.rollback(target_model_id=target_model_id)
-        active_model_id, shadow_model_id = self._repo.state()
-        active_item = self._repo.get(active_model_id)
+        self._r.rollback(target_model_id=target_model_id)
+        active_model_id, shadow_model_id = self._r.state()
+        active_item = self._r.get(active_model_id)
         if active_item is None:
             raise NotFoundError("Active model not found after rollback")
 
@@ -256,8 +262,8 @@ class ModelRegistryService:
         """
         if not self._has_legacy:
             return
-        active_id, shadow_id = self._repo.state()
-        active = self._repo.get(active_id) if active_id else None
+        active_id, shadow_id = self._r.state()
+        active = self._r.get(active_id) if active_id else None
         if active is not None:
             try:
                 switch_active_model(active.artifact_path)
@@ -266,7 +272,7 @@ class ModelRegistryService:
                     f"Registry active model {active.version} ({active.artifact_path}) could not be loaded: {exc}"
                 ) from exc
         if shadow_id:
-            shadow = self._repo.get(shadow_id)
+            shadow = self._r.get(shadow_id)
             try:
                 switch_shadow_model(shadow.artifact_path if shadow else None)
             except Exception as exc:
@@ -281,8 +287,8 @@ class ModelRegistryService:
         """
         if not self._has_legacy:
             return None
-        active_id, shadow_id = self._repo.state()
-        versions = [v for v in self._repo.list_versions() if v.artifact_path == artifact_path]
+        active_id, shadow_id = self._r.state()
+        versions = [v for v in self._r.list_versions() if v.artifact_path == artifact_path]
         if shadow_id:
             return shadow_id if any(v.id == shadow_id for v in versions) else None
         if any(v.id == active_id for v in versions):
@@ -308,9 +314,9 @@ class ModelRegistryService:
         if not self._has_legacy:
             return {"error": "Legacy repository not configured"}
 
-        rejected_id = self._repo.reject_shadow()
+        rejected_id = self._r.reject_shadow()
         switch_shadow_model(None)
-        active_model_id, shadow_model_id = self._repo.state()
+        active_model_id, shadow_model_id = self._r.state()
         if self._audit_service is not None:
             self._audit_service.log(
                 action="canary_rolled_back",

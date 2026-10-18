@@ -1,3 +1,6 @@
+# docker compose up --build                                   API + frontend (SQLite)
+# docker compose --profile observability up --build           + Prometheus :9090, Grafana :3000
+# DATABASE_BACKEND=postgres docker compose --profile postgres up --build   API on Postgres
 services:
   backend:
     build:
@@ -5,17 +8,29 @@ services:
       dockerfile: backend/Dockerfile
     container_name: churn-backend
     environment:
-      DATABASE_BACKEND: sqlite
-      SQLITE_PATH: /app/backend/data/app.db
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_BACKEND: ${DATABASE_BACKEND:-sqlite}
+      SQLITE_PATH: ${SQLITE_PATH:-/app/backend/data/app.db}
+      POSTGRES_URL: ${POSTGRES_URL:-postgresql+psycopg://churn:churn@postgres:5432/churn}
       ALLOWED_ORIGINS: '["http://localhost:5173"]'
       OBJECT_STORAGE_PROVIDER: none
       SCHEDULE_RETRAINING_ENABLED: "true"
+      PREDICT_RATE_LIMIT_PER_MINUTE: ${PREDICT_RATE_LIMIT_PER_MINUTE:-30}
+      CANARY_ENABLED: ${CANARY_ENABLED:-false}
+      CANARY_TRAFFIC_PERCENT: ${CANARY_TRAFFIC_PERCENT:-10}
+      CANARY_MIN_SAMPLES: ${CANARY_MIN_SAMPLES:-100}
+      CANARY_MAX_DISAGREEMENT_RATE: ${CANARY_MAX_DISAGREEMENT_RATE:-0.35}
+      CANARY_ROLLBACK_COOLDOWN_SECONDS: ${CANARY_ROLLBACK_COOLDOWN_SECONDS:-600}
     volumes:
       - ./backend/data:/app/backend/data
       - ./model/artifacts:/app/model/artifacts
       - ./data:/app/data:ro
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/health')"]
       interval: 30s
@@ -31,6 +46,55 @@ services:
       - "5173:80"
     depends_on:
       - backend
+
+  postgres:
+    image: postgres:16.4-alpine
+    container_name: churn-postgres
+    profiles: [postgres]
+    environment:
+      POSTGRES_USER: churn
+      POSTGRES_PASSWORD: churn  # local development only
+      POSTGRES_DB: churn
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U churn -d churn"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: churn-prometheus
+    profiles: [observability]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: churn-grafana
+    profiles: [observability]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"  # local demo: read-only anonymous access
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/churn-api.json
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  pgdata:
 
 networks:
   default:

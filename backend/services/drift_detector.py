@@ -16,11 +16,11 @@ import numpy as np
 import pandas as pd
 
 try:
-    from evidently.report import Report # type: ignore
-    from evidently.metrics import (     
-        DataDriftTable, # type: ignore
-        DataQualityTable, # type: ignore
-    )
+    # evidently 0.7.x (pinned in requirements.txt) keeps the Report/metric API
+    # under evidently.legacy; the old top-level evidently.report import no
+    # longer exists, which silently disabled this module.
+    from evidently.legacy.report import Report  # type: ignore
+    from evidently.legacy.metrics import DataDriftTable  # type: ignore
     HAS_EVIDENTLY = True
 except ImportError:
     HAS_EVIDENTLY = False
@@ -138,25 +138,22 @@ class EvidentiallyDriftDetector:
         reference_period = f"Reference: {len(self.reference_data)} samples"
         production_period = f"Production: {len(production_data)} samples"
 
-        # Create Evidently report
-        report = Report(
-            metrics=[
-                DataDriftTable(columns=columns or self.feature_names),
-                DataQualityTable(),
-            ]
-        )
+        cols = [c for c in (columns or self.feature_names or list(self.reference_data.columns))
+                if c in production_data.columns and c in self.reference_data.columns]
 
-        report.run(reference_data=self.reference_data, current_data=production_data)
+        # Evidently picks a test per column (KS / chi-squared / Wasserstein /
+        # Jensen-Shannon depending on type and size); drift_threshold is the
+        # threshold handed to that test.
+        report = Report(metrics=[DataDriftTable(columns=cols, stattest_threshold=self.drift_threshold)])
+        report.run(reference_data=self.reference_data[cols], current_data=production_data[cols])
+        drift_table = self._metric_result(report.as_dict()["metrics"], "DataDriftTable")
 
-        # Extract metrics
-        drift_data = report.as_dict()["metrics"]
-
-        drifted_features = self._extract_drifted_features(drift_data)
-        data_quality_issues = self._extract_data_quality_issues(drift_data)
+        drifted_features = self._extract_drifted_features(drift_table)
+        data_quality_issues = self._extract_data_quality_issues(production_data[cols])
 
         # Generate alerts
         alerts, severity = self._generate_alerts(
-            drifted_features, data_quality_issues, production_data
+            drifted_features, data_quality_issues, production_data, drift_table
         )
 
         drift_report = DriftReport(
@@ -167,11 +164,19 @@ class EvidentiallyDriftDetector:
             drifted_features=drifted_features,
             data_quality_issues=data_quality_issues,
             alerts=[a.to_dict() for a in alerts],
-            metrics=self._extract_summary_metrics(drift_data),
+            metrics=self._extract_summary_metrics(drift_table),
             alerts_severity=severity,
         )
 
         return drift_report
+
+    @staticmethod
+    def _metric_result(metrics: List[Dict[str, Any]], name: str) -> Dict[str, Any]:
+        """Report.as_dict()["metrics"] is a list of {"metric": name, "result": {...}}."""
+        for item in metrics:
+            if item.get("metric") == name:
+                return item.get("result", {})
+        return {}
 
     def detect_performance_drift(
         self,
@@ -310,54 +315,41 @@ class EvidentiallyDriftDetector:
 
         return drift_report
 
-    def _extract_drifted_features(self, drift_data: Dict) -> List[str]:
-        """Extract list of features with drift detected."""
-        drifted = []
-        # Parse Evidently drift table metrics
-        try:
-            drift_table = drift_data.get("data_drift_table", {})
-            for metric in drift_table.get("result", {}).get("drift_by_columns", []):
-                if metric.get("drift_detected"):
-                    drifted.append(metric.get("column_name"))
-        except Exception as e:
-            logger.warning(f"Error parsing drift table: {e}")
+    def _extract_drifted_features(self, drift_table: Dict[str, Any]) -> List[str]:
+        """Columns Evidently flags as drifted. drift_by_columns is a dict keyed by column."""
+        by_column = drift_table.get("drift_by_columns", {})
+        return [col for col, info in by_column.items() if info.get("drift_detected")]
 
-        return drifted
-
-    def _extract_data_quality_issues(self, drift_data: Dict) -> List[str]:
-        """Extract data quality issues from report."""
-        issues = []
-        try:
-            quality_table = drift_data.get("data_quality_table", {})
-            for col_issue in quality_table.get("result", {}).get("missing_values", []):
-                if col_issue.get("missing_percentage", 0) > 1.0:
-                    issues.append(f"Missing values in {col_issue.get('column_name')}")
-        except Exception as e:
-            logger.warning(f"Error parsing quality table: {e}")
-
-        return issues
+    def _extract_data_quality_issues(self, production_data: pd.DataFrame) -> List[str]:
+        """Columns with more than 1% missing values in the production window."""
+        missing_pct = production_data.isna().mean() * 100
+        return [f"Missing values in {col}" for col, pct in missing_pct.items() if pct > 1.0]
 
     def _generate_alerts(
         self,
         drifted_features: List[str],
         data_quality_issues: List[str],
         production_data: pd.DataFrame,
+        drift_table: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[DriftAlert], str]:
         """Generate alerts from drift findings."""
         alerts = []
         timestamp = datetime.utcnow().isoformat()
+        by_column = (drift_table or {}).get("drift_by_columns", {})
 
         # Drift alerts
         for feature in drifted_features:
+            info = by_column.get(feature, {})
+            score = float(info.get("drift_score", 0.0))
             alerts.append(
                 DriftAlert(
                     timestamp=timestamp,
                     feature_name=feature,
                     drift_detected=True,
                     drift_type="statistical",
-                    magnitude=0.0,
-                    threshold=self.drift_threshold,
-                    message=f"Statistical drift detected in {feature}",
+                    magnitude=score,
+                    threshold=float(info.get("stattest_threshold", self.drift_threshold)),
+                    message=f"Drift in {feature}: {info.get('stattest_name', 'test')} score {score:.4g}",
                 )
             )
 
@@ -385,26 +377,25 @@ class EvidentiallyDriftDetector:
 
         return alerts, severity
 
-    def _extract_summary_metrics(self, drift_data: Dict) -> Dict[str, Any]:
-        """Extract key metrics from drift data."""
-        metrics = {
-            "n_features_drifted": 0,
-            "drift_share": 0.0,
+    def _extract_summary_metrics(self, drift_table: Dict[str, Any]) -> Dict[str, Any]:
+        """Summary of the drift table. (The old version counted every column as drifted.)"""
+        by_column = drift_table.get("drift_by_columns", {})
+        return {
+            "n_features": int(drift_table.get("number_of_columns", len(by_column))),
+            "n_features_drifted": int(drift_table.get("number_of_drifted_columns", 0)),
+            "drift_share": float(drift_table.get("share_of_drifted_columns", 0.0)),
+            "dataset_drift": bool(drift_table.get("dataset_drift", False)),
+            "per_feature": {
+                col: {
+                    "test": info.get("stattest_name"),
+                    "score": float(info.get("drift_score", 0.0)),
+                    "threshold": float(info.get("stattest_threshold", self.drift_threshold)),
+                    "drift_detected": bool(info.get("drift_detected", False)),
+                }
+                for col, info in by_column.items()
+            },
             "timestamp": datetime.utcnow().isoformat(),
         }
-
-        try:
-            drift_table = drift_data.get("data_drift_table", {})
-            result = drift_table.get("result", {})
-            n_drifted = len(result.get("drift_by_columns", []))
-            n_total = len(result.get("drift_by_columns", [])) or 1
-
-            metrics["n_features_drifted"] = n_drifted
-            metrics["drift_share"] = float(n_drifted / n_total) if n_total > 0 else 0.0
-        except Exception as e:
-            logger.warning(f"Error extracting metrics: {e}")
-
-        return metrics
 
     def save_report(
         self,

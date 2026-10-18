@@ -20,12 +20,17 @@ how to reproduce it, and what was not verified.
 | Promotion gate | `POST /models/promote` runs `ModelValidationGate`; blockers give HTTP 409, admin override requires a reason and is audit-logged. |
 | Auth | Seeded passwords come from environment variables; production refuses to start with defaults. The frontend ships only the public analyst/viewer demo logins, no admin credentials. |
 | Slices / model card | Calibration holds in every slice; seniors have lower within-group AUC ([model card](docs/model_card.md), [slices](docs/slice_metrics.md)). |
-| Load test | Done on the **previous** (class-weighted) model: 135 req/s, p95 41 ms at 20 users on one worker, 2 vCPU ([details](docs/loadtest_results.md)). Not re-run on the calibrated model or with the challenger attached (every request now scores two models); not measured on the deployed host. |
+| Pipeline | `dvc repro` rebuilds data validation, training, evaluation and the threshold analysis from the raw CSV; runs are logged to MLflow and both models registered; reports reproduce byte for byte ([details](#reproducible-pipeline-dvc--mlflow)). |
+| Data validation | One pandera rule table for training data and batch files, the same rules in the `/predict` request model ([details](#data-validation-pandera)). |
+| CI | ruff, mypy, tests with coverage (74%) on SQLite **and** Postgres, image build + smoke test + Trivy scan; golden predictions on a committed synthetic sample pin the real model's output ([details](#ci)). |
+| Drift | Shifted traffic fires the live monitor's alerts and Evidently's tests and triggers a retraining job ([transcript](docs/demo_drift.md)). |
+| Observability | `/metrics` for Prometheus; compose profile with Prometheus + a provisioned Grafana dashboard ([screenshots](#observability-prometheus--grafana)). |
+| Load test | Final code, challenger attached: 20 users, 1 worker: p95 25 ms with `/explain` in the mix; capacity about 178 req/s (1 worker) and 290 req/s (2 workers) on a 16-thread desktop ([details](docs/loadtest_results.md)). Not measured on the deployed host. |
 | Shadow/canary + rollback | Exercised end to end with a healthy and a degraded candidate, including a gate refusal ([transcript](docs/demo_shadow_rollback.md)). |
 | Training/serving parity | Guarded by a test that runs in CI ([`test_feature_parity.py`](backend/tests/test_feature_parity.py)). |
 | Live backend | **Not deployed yet.** Render Blueprint and a verification script are included; fill in the URL below once deployed. |
 | Live frontend | Vercel (needs `VITE_API_URL` pointing at a live backend to work). |
-| Database in the default/deployed mode | **SQLite**, ephemeral on Render. Postgres code paths exist but are not the deployed mode and were not exercised here. |
+| Database | **SQLite** by default (ephemeral on Render). **Postgres works and is tested**: full suite and the rollback demo pass on Postgres 16; six Postgres defects were found and fixed on the way ([details](#postgres)). |
 
 Live URLs: _backend: TODO after deploy_ , _frontend: TODO_ (run `scripts/verify_deployment.py` against
 them before putting them on a resume; see [Deployment](#deployment)).
@@ -257,6 +262,217 @@ Each is fixed and has a regression test.
 7. Minor: the threshold analysis valued a saved customer with the mean monthly charge of churners over
    the whole dataset, test labels included. It now uses train+validation only.
 
+## MLOps: pipeline, validation, CI, drift, observability, Postgres
+
+### Reproducible pipeline (DVC + MLflow)
+
+`dvc repro` rebuilds everything from the raw CSV; `dvc.yaml` declares the stages and their
+dependencies, `params.yaml` the settings, `dvc.lock` the hashes of the last run, and `metrics.json`
+the headline test metrics (`dvc metrics show`).
+
+| Stage | Command | Outputs |
+|---|---|---|
+| `validate_data` | `model/training/validate_data.py` | `reports/data_validation.json` (fails the pipeline on bad data) |
+| `train` | `model/training/train.py` | CatBoost + calibration, logistic-regression challenger, `training_metadata.json`; logs the run to MLflow and registers both models |
+| `evaluate` | `model/training/evaluate.py` | model comparison, slices, reliability diagram, `metrics.json`; logs test metrics to MLflow, linked to the training run |
+| `threshold_analysis` | `model/training/threshold_analysis.py` | `docs/threshold_analysis.json` |
+| `ci_golden` | `scripts/make_ci_sample.py --golden` | golden predictions for the CI sample |
+| `dataset_report` | `model/training/build_dataset_report.py` | `data/dataset_report.md` |
+
+`dvc repro -f` (all stages forced) ran end to end in 5 min 10 s (`dvc repro -f`, all stages forced; a later `dvc repro` that re-ran the five
+changed stages took 7 min 16 s) on this machine and reproduced every
+generated document byte for byte (the `.cbm` file's bytes differ between runs; every prediction derived
+from it, and so every report, is identical).
+
+MLflow: local store `sqlite:///mlflow.db` with artifacts in `mlartifacts/` (both git-ignored;
+`MLFLOW_TRACKING_URI` overrides). `train.py` registers `churn-catboost` and `churn-logreg-challenger`;
+the API loads registered models by URI, so `POST /api/v1/models/register` accepts
+`"artifact_path": "models:/churn-catboost/1"` (needs `mlflow` installed; the slim API image does not
+have it, so use a file or object-storage path there).
+
+There is **no DVC remote**: `.dvc/config` is empty, so `dvc pull` cannot work. Place the IBM Telco CSV
+at `data/Telco-Customer-Churn.csv` yourself.
+
+### Data validation (pandera)
+
+`model/data_schema.py` holds one rule table rendered two ways:
+
+- **pandera schemas** for the training data (`TRAINING_SCHEMA`: value domains, unique `customerID`,
+  `Churn` label, blank `TotalCharges` only at tenure 0, sanity ranges, no unexpected columns; used by
+  the `validate_data` stage and by `load_dataset`) and for batch-scoring files (`FEATURE_SCHEMA`; a bad
+  file now fails with every bad row listed instead of the first one).
+- **the same cross-field rules in plain Python** inside the `/predict` request model: "no phone service"
+  must coincide with `MultipleLines="No phone service"`, and "no internet" with all six add-ons saying
+  "No internet service". Inconsistent requests get a 422 (the model never saw such rows; the
+  frontend's form never sends them). Pandera costs about 24 ms per call even for one row (57 ms for all
+  7,043 rows), too much for a request whose p95 is in the tens of milliseconds, hence the plain-Python
+  rendering; a test checks both agree on all 8,748 service combinations.
+
+The full dataset passes the training schema. Malformed-row tests: `backend/tests/test_data_validation.py`.
+
+### CI
+
+`.github/workflows/ci.yml`, jobs run in parallel:
+
+| Job | What it does |
+|---|---|
+| Backend Checks | ruff, mypy (non-strict, `backend/`), validates the CI sample against the training schema, full test suite with coverage (summary in the job page, `coverage.xml` uploaded) |
+| Backend Tests on Postgres | same suite with `DATABASE_BACKEND=postgres` against a Postgres 16 service container (migrations run on startup) |
+| API Image Build, Smoke Test and Scan | builds the Docker image, starts it, calls health and `/predict`, scans with Trivy (fails on fixable CRITICAL, lists HIGH) |
+| Frontend Checks | eslint, type-check and build |
+
+Plus `security.yml` (Bandit, pip-audit, CodeQL, Gitleaks), Dependabot (`.github/dependabot.yml`: pip,
+npm, GitHub Actions, Docker; weekly), and `.pre-commit-config.yaml` (ruff, mypy and file hygiene
+checks; none rewrite files).
+
+**CI runs the real model.** The served artifact is in git, and `data/ci_sample.csv` is a committed
+500-row sample, so the tests that used to skip without the DVC dataset now run. The sample is
+**synthetic** (`scripts/make_ci_sample.py`, fixed seed): the IBM Telco CSV has no clear data license
+(IBM's repository license covers its code), so real rows are not committed. Category shares are
+rounded aggregate constants, the consistency rules hold, and `Churn` is drawn from the shipped model's
+own probabilities, so the sample says nothing about real accuracy. Its job is
+`data/ci_sample_golden.json`: the shipped model's calibrated output for all 500 rows, checked through
+the training preprocessing and through the HTTP `/predict` path (`test_ci_sample.py`). Any change to
+preprocessing, serving feature engineering, the artifact or a library version that moves a prediction
+by more than 1e-6 fails CI. It also showed that tenure-0 rows (blank `TotalCharges` in training, 0.0
+in requests) score identically: no skew.
+
+### Drift: live monitor, Evidently, retraining trigger
+
+`python scripts/demo_drift.py --out docs/demo_drift.md` ([transcript](docs/demo_drift.md)) replays 300
+held-out rows, then 300 rows with tenure x 0.3 and MonthlyCharges x 1.3 (TotalCharges recomputed):
+
+| Signal (live monitor) | Baseline half | Shifted half | Relative change | Alert |
+|---|---:|---:|---:|---|
+| tenure | 32.28 | 9.65 | -0.701 | yes |
+| MonthlyCharges | 65.75 | 87.02 | +0.323 | yes |
+| TotalCharges | 2,222 | 897 | -0.596 | yes |
+| mean served churn probability | 0.273 | 0.392 | +0.432 | yes |
+
+On baseline-only traffic nothing fired and the scheduler did nothing. After the shift, Evidently's
+Kolmogorov-Smirnov tests flagged exactly the three shifted features (p = 1.4e-42, 1.2e-17, 5.2e-11)
+and none of the 15 unshifted ones, and one scheduler poll enqueued a retraining job with reason
+`drift_alert`; the job completed and registered a candidate.
+
+The live monitor (`GET /api/v1/system/monitoring`) compares the mean of each numeric input and of the
+served score between the older and newer half of the latest 5,000 predictions; the scheduler polls it
+(`SCHEDULE_RETRAIN_POLL_SECONDS`) and enqueues a retraining job on alerts. Evidently
+(`services/drift_detector.py`) adds per-feature statistical tests on demand. The retrained candidate is
+registered but not promoted: the retraining job still uses its own older recipe and pre-check (see
+Limitations).
+
+### Observability (Prometheus + Grafana)
+
+`GET /metrics` (public unless `METRICS_TOKEN` is set) exposes:
+
+| Metric | Type |
+|---|---|
+| `churn_http_request_duration_seconds{method,route,status}` | histogram, route templates, timed in the outermost middleware |
+| `churn_predictions_total{served_by,decision}` | counter (active vs shadow-served, churn vs stay) |
+| `churn_prediction_score` | histogram of the served probability |
+| `churn_canary_disagreement_rate`, `churn_canary_compared_requests`, `churn_canary_disagreements` | gauges, read from the canary at scrape time |
+| `churn_canary_rollbacks_total` | counter |
+| `churn_model_info{slot,version,kind,calibration}` | which model is active and which is in shadow |
+
+With several workers set `PROMETHEUS_MULTIPROC_DIR` (prometheus_client multiprocess mode; `tasks.py
+loadtest --workers 2` does). `docker compose --profile observability up --build` adds Prometheus
+(:9090, scraping every 5 s) and Grafana (:3000, anonymous read-only, dashboard provisioned from
+`observability/grafana/dashboards/churn-api.json`).
+
+Screenshots from this machine (Docker Desktop, canary at 20% for the demo):
+
+- [during a load test](docs/img/grafana_loadtest.png): 2,022 compared requests, live
+  CatBoost-vs-challenger disagreement 2.97% (3.4% offline on the test split).
+- [right after the rollback demo](docs/img/grafana_rollback.png): v2 active (Platt-calibrated), the
+  degraded v3's disagreement at 33.3% over 60 compared requests, one rollback, the gate's 409 in the
+  error panel. Transcript: [docs/demo_shadow_rollback_live.md](docs/demo_shadow_rollback_live.md).
+
+### Postgres
+
+`DATABASE_BACKEND=postgres` now works and is tested: the whole suite passes on SQLite and on Postgres 16
+(150 tests each, also in CI), the rollback demo passes against the API container on Postgres
+([transcript](docs/demo_shadow_rollback_postgres.md)), and predictions, audit events, the registry and
+batch jobs are persisted (checked in the tables; after a container restart the API still serves the
+promoted v2). Getting there meant fixing six defects in a path that had never been run (see the bug
+list). Run it with `DATABASE_BACKEND=postgres docker compose --profile postgres up --build`.
+
+### Developer experience
+
+`tasks.py` is a cross-platform task runner (Windows has no `make`); the `Makefile` delegates to it:
+
+```bash
+python tasks.py setup [--frontend]     # .venv + requirements.txt + requirements-dev.txt (+ npm ci)
+python tasks.py test | lint | train | demo | loadtest | up [--observability] | down
+make setup test lint train demo loadtest up down   # same, where make exists
+```
+
+`.devcontainer/devcontainer.json`: Python 3.13, Node 20, Docker CLI against the host daemon;
+`postCreateCommand` runs `tasks.py setup --frontend`.
+
+## Bugs found during the MLOps pass
+
+Each is fixed and covered by a regression test (named in brackets) unless noted.
+
+Drift and monitoring
+
+1. **The Evidently drift module never ran.** `requirements.txt` pins Evidently 0.7.21, which moved the
+   API the code imported (`evidently.report`) under `evidently.legacy`; the import failed, a flag
+   silently disabled the module, and its 7 tests wrapped `ImportError` in `pytest.skip`, so they were
+   always skipped. (The README blamed a missing install.) Ported to the 0.7 legacy API; the tests now
+   run and skip only explicitly. [`test_drift_detection.py`]
+2. **Even with Evidently, no drifted feature would have been reported.** The parser looked for a dict
+   key and a list that do not exist in Evidently's output, and the summary counted every column as
+   drifted (`drift_share` always 1.0). One skipped test also asserted an alert for perfect predictions
+   (AUC 1.0); it now uses degraded scores. [`test_detect_drift_present`, `test_performance_drift_detection`]
+3. **The live monitor's `TotalServices` signal was always 0.** It is an engineered feature, not part of
+   the stored request, so it was never found. [`test_total_services_signal_reflects_the_requests`]
+4. **The live monitor froze after 5,000 predictions in SQLite mode** (it read the oldest page of the
+   history) **and swapped its windows on Postgres** (newest-first ordering, so drift deltas had the
+   wrong sign). Both repositories now provide `recent()`. [`test_monitor_watches_the_latest_window_not_the_first`]
+5. **A "scheduled" retrain fired 30 minutes after every restart**, drift or not: the last-retrain
+   timestamp started at 0, so the 24-hour interval had always elapsed. [`test_no_retrain_shortly_after_startup_without_drift`]
+
+Postgres (`DATABASE_BACKEND=postgres` had never been run)
+
+6. **The API could not start unless launched from `backend/`**: Alembic's `script_location` was
+   relative to the working directory. (Startup on Postgres in every test.)
+7. **Running the migrations silenced the application's loggers** (`fileConfig` defaults to
+   `disable_existing_loggers=True`, and migrations run inside API startup).
+8. **Every repository read failed with `DetachedInstanceError`**: sessions expired objects on commit
+   and the repositories read them afterwards. (`expire_on_commit=False`; whole suite on Postgres.)
+9. **Every prediction failed after March 2026**: `audit_logs` and `feedback_events` are partitioned by
+   month but only March 2026 partitions were ever created, and every prediction writes an audit event.
+   Migration `0003` adds DEFAULT partitions.
+10. **Monitoring snapshots, feedback and outcomes failed with a NOT NULL violation**: `event_at` had no
+    default although the ORM declared one. Migration `0003` adds it. [`test_feedback_and_outcome_round_trip`]
+11. **Automatic canary rollback silently failed**: the `stage` CHECK constraint did not allow
+    `rejected`, the prediction path swallowed the exception, and the bad candidate stayed in shadow.
+    Migration `0004`; the failure is now logged. [`test_abort_canary_through_the_app_on_the_configured_backend`]
+
+Packaging and runtime
+
+12. **A locally built image refused to start**: `.dockerignore` did not exclude `backend/data/*.db`, so
+    the local registry (and local predictions) were baked into the image, and the registry stored the
+    seed model as an absolute Windows path, which does not exist in a Linux container. The seed is now
+    repo-relative, old absolute paths are mapped onto the checkout, and local state is excluded.
+    [`test_app_starts_with_a_registry_seeded_on_another_machine`]
+13. **`model_validation_service` was imported under two module names** (`backend.services...` in the
+    registry, gate and some tests, `services...` elsewhere), so it existed twice in memory and a patch
+    or `isinstance` check on one copy would miss the other. Found by mypy, which also flagged ORM
+    timestamp columns typed as `str`.
+14. **The retraining job wrote into the repository** (`catboost_info/` in the working directory, models
+    and bundles under `model/artifacts/`). `RETRAINING_OUTPUT_DIR` redirects them; CatBoost no longer
+    writes training logs.
+
+Test and tooling hygiene
+
+15. The rate limiter's in-memory counters leaked between tests (a 500-request test made later tests
+    fail with 429); `conftest.py` now resets them.
+16. The venv had pandas 3.0.2 while the lock pins 2.2.3. Aligned to the lock and re-ran the pipeline:
+    every generated report was byte-identical under both versions.
+17. My own `tasks.py loadtest` left uvicorn's worker processes running on Windows (`terminate()`
+    stops only the parent); it now stops the whole process tree.
+
 ## Architecture
 
 - **Frontend** `frontend/`: React + TypeScript + Vite, Tailwind, Recharts.
@@ -286,9 +502,9 @@ variant, record the prediction and an audit event.
 | Audit log | **In memory**, lost on restart | Postgres |
 | Batch jobs | **In memory** | Postgres |
 
-The Postgres path exists (SQLAlchemy models, repositories, Alembic migrations `0001`, `0002`) but has
-not been run as part of this verification; only SQLite was exercised. On a free Render instance the
-SQLite file also sits on an ephemeral disk and resets on every deploy.
+Postgres mode runs Alembic migrations `0001` to `0004` on startup and is covered by the full test suite
+and the rollback demo (see [Postgres](#postgres)). On a free Render instance the SQLite file sits on an
+ephemeral disk and resets on every deploy.
 
 ## API
 
@@ -300,7 +516,8 @@ Interactive docs at `/docs`. Auth is JWT with roles `admin`, `analyst`, `viewer`
   `POST .../outcome`, `GET .../feedback/summary`
 - Models (admin): `GET /api/v1/models`, `POST .../register`, `POST .../shadow`, `POST .../promote`
   (validation gate; `override_gate` + `override_reason` optional), `POST .../rollback`
-- System: `GET /api/v1/system/health`, `/ready`, `/metrics`, `/monitoring`, `/canary`
+- System: `GET /api/v1/system/health`, `/ready`, `/metrics` (admin, legacy text), `/monitoring`, `/canary`
+- Prometheus: `GET /metrics` (public unless `METRICS_TOKEN` is set)
 - Jobs: `POST /api/v1/jobs/batch-score`, `/reports`, `/retrain`, `GET /api/v1/jobs`, `/{id}`, `/{id}/download`
 - Legacy unauthenticated `POST /predict` and `POST /explain` for older clients.
 
@@ -308,10 +525,17 @@ Interactive docs at `/docs`. Auth is JWT with roles `admin`, `analyst`, `viewer`
 
 ## Run locally
 
-Requirements: Python 3.13, Node 18+. The training CSV is tracked with DVC and is not in git: run
-`dvc pull`, or place the IBM Telco CSV at `data/Telco-Customer-Churn.csv`. The API itself does not
-need it, except for model promotion (the gate's evaluation data); training scripts, the load test and
-the demo do.
+Requirements: Python 3.13, Node 18+ (Docker for `up`). The training CSV is not in git and there is no
+DVC remote, so place the IBM Telco CSV at `data/Telco-Customer-Churn.csv` yourself. The API and the
+tests do not need it (tests use the committed synthetic sample); model promotion (the gate's evaluation
+data), training and the demos do.
+
+```bash
+python tasks.py setup --frontend   # or: make setup
+python tasks.py up                 # API http://localhost:8000/docs, frontend http://localhost:5173
+```
+
+Or by hand:
 
 ```powershell
 # backend (from repo root)
@@ -336,25 +560,25 @@ UTF-16); the API only needs `requirements-runtime.txt`.
 ```powershell
 $env:PYTHONPATH = (Get-Location).Path
 $env:MLFLOW_ALLOW_FILE_STORE = "true"
-pip install -r requirements.txt     # tests need the full set (mlflow, pytest, httpx)
+pip install -r requirements.txt -r requirements-dev.txt
+pytest -q backend/tests                      # or: python tasks.py test (adds coverage)
+$env:DATABASE_BACKEND = "postgres"           # same suite against Postgres (docker compose --profile postgres up -d postgres)
+$env:POSTGRES_URL = "postgresql+psycopg://churn:churn@localhost:5432/churn"
 pytest -q backend/tests
 ```
 
-Last run (Python 3.13, dataset present): **105 passed, 7 skipped**. The 7 skips are Evidently drift
-tests, skipped because Evidently is not installed in this environment; I have not run them. CI does not
-have the DVC-tracked CSV, so the tests that replay dataset rows skip there; the feature-parity, canary,
-gate, auth, calibration, challenger, registry, settings and CORS tests do not need it.
+Last run (Python 3.13): **150 passed, 0 skipped** on SQLite and **150 passed** on Postgres 16; line
+coverage 74% of `backend/` and `model/` (tests excluded). Without the DVC dataset only
+`test_full_training_csv_passes` skips; everything else uses the committed synthetic sample.
 
 ### Reproducing the other measurements
 
 ```powershell
-python model/training/train.py                       # model + calibration + training_metadata.json
-python model/training/evaluate.py                    # docs/model_comparison.md, slice_metrics.md, reliability_diagram.png, evaluation.json, metrics.json
-python model/training/threshold_analysis.py          # docs/threshold_analysis.json
-python model/training/build_demo_candidates.py       # healthy + degraded demo models
+dvc repro                                            # validate -> train -> evaluate -> threshold -> golden predictions (or: python tasks.py train)
 python model/training/permutation_check.py           # 20 permuted-label models -> docs/permutation_check.md (~3 min)
-python scripts/demo_shadow_rollback.py               # gate + shadow -> rollback demo
-bash loadtest/run_loadtest.sh 20 5 60s               # Locust (needs `pip install locust`; use Git Bash/WSL on Windows)
+python tasks.py demo                                 # demo candidates, rollback demo, drift demo -> docs/
+python tasks.py loadtest --users 20 --workers 1      # Locust; see docs/loadtest_results.md for the five configurations
+python scripts/demo_shadow_rollback.py --base-url http://localhost:8000 --delay 0.05   # against a running server
 ```
 
 ## Deployment
@@ -385,7 +609,7 @@ README said) leaves the model out of the build and the service fails to start.
    authenticated route, and exits non-zero on the first failure. Paste its output and the two URLs into
    the table at the top of this file only after it passes.
 
-CI (`.github/workflows/ci.yml`) lints, byte-compiles and runs the tests. CD (`cd.yml`) runs behind a
+CI is described [above](#ci). CD (`cd.yml`) runs behind a
 GitHub `production` environment, optionally promotes a model, triggers the Render deploy hook, waits
 for readiness and triggers the Vercel hook. The approval gate only works if required reviewers are set
 on that environment in the repository settings. Secrets: `RENDER_DEPLOY_HOOK_URL`,
@@ -402,7 +626,8 @@ on that environment in the repository settings. Secrets: `RENDER_DEPLOY_HOOK_URL
 `REDIS_ENABLED`/`REDIS_URL`, `OBJECT_STORAGE_PROVIDER` (`none`|`local`|`s3`|`azure`) and its bucket
 settings, `CANARY_ENABLED`, `CANARY_TRAFFIC_PERCENT`, `CANARY_MIN_SAMPLES`,
 `CANARY_MAX_DISAGREEMENT_RATE`, `CANARY_ROLLBACK_COOLDOWN_SECONDS`, `PREDICT_RATE_LIMIT_PER_MINUTE`,
-`SCHEDULE_RETRAINING_ENABLED`. See `backend/.env.example`.
+`SCHEDULE_RETRAINING_ENABLED`, `METRICS_TOKEN`, `PROMETHEUS_MULTIPROC_DIR`, `RETRAINING_OUTPUT_DIR`,
+`MLFLOW_TRACKING_URI`. See `backend/.env.example`.
 
 ## Security notes
 
@@ -429,10 +654,17 @@ settings, `CANARY_ENABLED`, `CANARY_TRAFFIC_PERCENT`, `CANARY_MIN_SAMPLES`,
 - The promotion gate's default evaluation data overlaps the training data; with real data it should be
   recent labelled outcomes that no candidate was trained on.
 - The retraining job (`services/retraining_service.py`) still uses its own simpler recipe (80/20 split,
-  no calibration file); its candidates are served uncalibrated and must pass the gate to be promoted.
-- The shadow/canary demo uses synthetic candidates and replayed historical rows, not live drift.
-- Load test numbers come from one VM with the load generator on the same host, on the previous model;
-  `/explain` was not tested; nothing was measured on the deployed instance.
-- Default storage is SQLite with in-memory prediction history and audit log. Postgres was not
-  exercised.
+  no calibration file) and its own pre-check with `ModelValidationGate`'s default thresholds (recall >=
+  0.65 at a 0.5 cut-off), which differ from the promotion gate's; in the drift demo its candidate failed
+  that pre-check. Moving retraining onto `train.py` (or `dvc repro`) is the obvious next step.
+- The shadow/canary and drift demos use synthetic candidates, replayed historical rows and an
+  artificial shift, not live traffic.
+- Load test numbers come from one desktop with the load generator on the same host; nothing was
+  measured on the deployed instance. At 20 users the throughput figure is set by the load generator.
+- Default storage is SQLite with in-memory prediction history and audit log. Postgres has a DEFAULT
+  partition for the event tables but no monthly partition management or retention yet.
+- The API image is 2.08 GB, and Trivy lists 8 HIGH vulnerabilities with available fixes in Python
+  packages (0 CRITICAL; starlette, python-multipart, setuptools, urllib3 and others); upgrading
+  Starlette means a FastAPI upgrade, left to Dependabot.
+- The devcontainer was written but not built here.
 - The backend had not been deployed or verified on Render at the time of writing.

@@ -13,7 +13,12 @@ from model.preprocessing.preprocessing import load_artifacts, prepare_for_model,
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SAMPLE_DATASET = REPO_ROOT / "data" / "Telco-Customer-Churn.csv"
+# Full dataset when present (DVC-tracked); otherwise the committed synthetic CI
+# sample (scripts/make_ci_sample.py), so these tests also run in CI.
+SAMPLE_DATASET = next(
+    p for p in (REPO_ROOT / "data" / "Telco-Customer-Churn.csv", REPO_ROOT / "data" / "ci_sample.csv")
+    if p.exists()
+)
 
 # Keep thresholds practical to avoid CI flakiness while still guarding regressions.
 PREPROCESS_LATENCY_SECONDS = 2.0

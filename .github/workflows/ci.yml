@@ -7,10 +7,15 @@ on:
       - "**"
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -20,40 +25,60 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff pytest httpx shap catboost
+          pip install -r requirements.txt -r requirements-dev.txt
 
-      - name: Lint backend code
-        run: |
-          ruff check backend model/training
+      - name: Lint (ruff)
+        run: ruff check backend model scripts loadtest
 
-      - name: Validate Python import/syntax pipeline
-        run: |
-          python -m compileall backend model/training
+      - name: Type check (mypy, non-strict)
+        run: mypy backend
 
-      # The served model (model/artifacts/catboost_churn.cbm + its calibration
-      # file) is tracked in git, so tests run against the real artifact. (A step
-      # that overwrote it with a 5-feature mock model was removed.)
+      - name: Validate the committed CI sample against the training schema
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python model/training/validate_data.py --data data/ci_sample.csv
 
-      # Sets PYTHONPATH to the root workspace so cross-folder imports resolve smoothly
-      - name: Run backend regression tests
+      # The served model (model/artifacts/catboost_churn.cbm + calibration) and the
+      # synthetic CI sample are tracked in git, so the tests run against the real
+      # artifact: golden predictions, feature parity, gate, auth, challenger, ...
+      - name: Run backend tests with coverage
         env:
           PYTHONPATH: ${{ github.workspace }}
           DATABASE_BACKEND: sqlite
+          MLFLOW_ALLOW_FILE_STORE: "true"
         run: |
-          pytest -q backend/tests --maxfail=1 --disable-warnings
+          pytest -q backend/tests --disable-warnings             --cov --cov-report=term --cov-report=xml:coverage.xml --junitxml=pytest.xml
 
-      - name: Backend smoke test (SQLite app factory)
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-          DATABASE_BACKEND: sqlite
+      - name: Coverage summary
+        if: always()
         run: |
-          cd backend
-          python -c "from app_factory import create_app; app=create_app(); assert len(app.routes) > 0; print('backend_app_ok', len(app.routes))"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          if Path("coverage.xml").exists():
+              rate = float(ET.parse("coverage.xml").getroot().get("line-rate")) * 100
+              print(f"### Coverage: {rate:.1f}% of lines (backend + model, tests excluded)")
+          if Path("pytest.xml").exists():
+              s = ET.parse("pytest.xml").getroot().find("testsuite")
+              print(f"Tests: {s.get('tests')} run, {s.get('failures')} failed, {s.get('errors')} errors, {s.get('skipped')} skipped")
+          PY
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            coverage.xml
+            pytest.xml
 
       - name: Data pipeline validation (dataset registry report)
         env:
@@ -61,15 +86,90 @@ jobs:
         run: |
           python model/training/build_dataset_report.py
 
-      - name: Upload dataset report artifact
-        uses: actions/upload-artifact@v4
+  backend-postgres:
+    name: Backend Tests on Postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: churn
+          POSTGRES_PASSWORD: churn
+          POSTGRES_DB: churn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U churn -d churn"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: dataset-report
-          path: data/dataset_report.md
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      # Same suite, DATABASE_BACKEND=postgres: the app runs the Alembic migrations
+      # on startup and conftest.py empties the tables between tests.
+      - name: Run backend tests against Postgres
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          DATABASE_BACKEND: postgres
+          POSTGRES_URL: postgresql+psycopg://churn:churn@localhost:5432/churn
+          MLFLOW_ALLOW_FILE_STORE: "true"
+        run: pytest -q backend/tests --disable-warnings
+
+  container:
+    name: API Image Build, Smoke Test and Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -f backend/Dockerfile -t churn-api:ci .
+
+      - name: Smoke test the container
+        run: |
+          docker run -d --name api -p 8000:8000 -e ENVIRONMENT=development churn-api:ci
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8000/api/v1/system/health && break
+            sleep 2
+          done
+          curl -fsS -X POST http://localhost:8000/api/v1/predictions/predict             -H 'Content-Type: application/json'             -d '{"MonthlyCharges":85.0,"tenure":5,"TotalCharges":425.0,"SeniorCitizen":0,"Partner":"Yes","Dependents":"No","PhoneService":"Yes","MultipleLines":"No","InternetService":"Fiber optic","OnlineSecurity":"No","OnlineBackup":"No","DeviceProtection":"No","TechSupport":"No","StreamingTV":"Yes","StreamingMovies":"No","Contract":"Month-to-month","PaperlessBilling":"Yes","PaymentMethod":"Electronic check"}'             | tee prediction.json
+          grep -q '"probability"' prediction.json
+
+      - name: Container logs
+        if: always()
+        run: docker logs api || true
+
+      # Fails on CRITICAL vulnerabilities that have a fix; HIGH ones are listed.
+      - name: Scan image (Trivy)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1             image --scanners vuln --severity HIGH --ignore-unfixed --exit-code 0 --no-progress churn-api:ci
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1             image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress churn-api:ci
 
   frontend:
     name: Frontend Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code

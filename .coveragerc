@@ -1,0 +1,9 @@
+[run]
+source = backend, model
+omit =
+    */tests/*
+    */__pycache__/*
+    backend/db/alembic/*
+
+[report]
+skip_empty = True

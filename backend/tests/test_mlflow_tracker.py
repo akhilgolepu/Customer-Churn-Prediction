@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import tempfile
 from pathlib import Path
-from backend.services.mlflow_tracker import MLflowExperimentTracker
+from services.mlflow_tracker import MLflowExperimentTracker
 
 
 @pytest.fixture
@@ -220,7 +220,7 @@ class TestMLflowIntegrationPatterns:
         ]
 
         with tracker.tracking_run(run_name="cv_workflow"):
-            from backend.services.mlflow_tracker import log_cross_validation_results
+            from services.mlflow_tracker import log_cross_validation_results
 
             log_cross_validation_results(fold_results)
             # If no exception, test passes

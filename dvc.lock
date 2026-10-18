@@ -1,0 +1,350 @@
+schema: '2.0'
+stages:
+  validate_data:
+    cmd: python model/training/validate_data.py
+    deps:
+    - path: data/Telco-Customer-Churn.csv
+      hash: md5
+      md5: 0f9de68e012bd3aed5fa7cdc9fc421af
+      size: 977501
+    - path: model/data_schema.py
+      hash: md5
+      md5: 5dbdf91be5746ed2e1a62d062165423a
+      size: 6422
+    - path: model/training/validate_data.py
+      hash: md5
+      md5: 21d715c99a877f447e6ac493cfc034a2
+      size: 1995
+    params:
+      params.yaml:
+        data:
+          path: data/Telco-Customer-Churn.csv
+          target: Churn
+          positive_label: Yes
+          drop_columns:
+          - customerID
+          - gender
+    outs:
+    - path: reports/data_validation.json
+      hash: md5
+      md5: ddc5caa9f621d0acb67a45506c171686
+      size: 238
+  train:
+    cmd: python model/training/train.py
+    deps:
+    - path: data/Telco-Customer-Churn.csv
+      hash: md5
+      md5: 0f9de68e012bd3aed5fa7cdc9fc421af
+      size: 977501
+    - path: model/artifacts/cat_columns.json
+      hash: md5
+      md5: de51ff60e353090fba195a982327b592
+      size: 322
+    - path: model/artifacts/feature_list.json
+      hash: md5
+      md5: fd053ac30812bc00e4076cb0e670c5bd
+      size: 542
+    - path: model/calibration.py
+      hash: md5
+      md5: 1d2de336c654fdace783fbb8e6d99c54
+      size: 4131
+    - path: model/linear_model.py
+      hash: md5
+      md5: fe492c055de95c812b60776ada21d81e
+      size: 4964
+    - path: model/preprocessing/preprocessing.py
+      hash: md5
+      md5: 1605756618ac280cb8f6cf32020920e9
+      size: 7333
+    - path: model/tracking.py
+      hash: md5
+      md5: 268c2468040b9c9623101032206d6d29
+      size: 3520
+    - path: model/training/common.py
+      hash: md5
+      md5: 1517599ab69049e6f101039cce3019ee
+      size: 10162
+    - path: model/training/train.py
+      hash: md5
+      md5: e253dde6e8d1188df1208e8ba19f56f5
+      size: 7682
+    - path: reports/data_validation.json
+      hash: md5
+      md5: ddc5caa9f621d0acb67a45506c171686
+      size: 238
+    params:
+      params.yaml:
+        calibration:
+          methods:
+          - identity
+          - platt
+          - isotonic
+          folds: 5
+          seed: 42
+          selection_metric: log_loss
+          reliability_bins: 10
+        data:
+          path: data/Telco-Customer-Churn.csv
+          target: Churn
+          positive_label: Yes
+          drop_columns:
+          - customerID
+          - gender
+        models:
+          catboost:
+            depth: 4
+            learning_rate: 0.03
+            l2_leaf_reg: 10
+            bagging_temperature: 0
+            max_iterations: 3000
+            early_stopping_rounds: 100
+            seed: 42
+            class_weight:
+          lightgbm:
+            learning_rate: 0.03
+            num_leaves: 15
+            min_child_samples: 40
+            subsample: 0.8
+            subsample_freq: 1
+            colsample_bytree: 0.8
+            reg_lambda: 5.0
+            max_iterations: 3000
+            early_stopping_rounds: 100
+            seed: 42
+          logistic_regression:
+            C: 1.0
+            max_iter: 2000
+        output:
+          model_path: model/artifacts/catboost_churn.cbm
+          calibration_path: model/artifacts/catboost_churn.calibration.json
+          challenger_path: model/artifacts/logreg_challenger.json
+          training_metadata_path: model/artifacts/training_metadata.json
+          metrics_path: metrics.json
+        split:
+          test_size: 0.2
+          val_size: 0.2
+          seed: 42
+    outs:
+    - path: model/artifacts/catboost_churn.calibration.json
+      hash: md5
+      md5: d03922ec6897f34eda75bea689442487
+      size: 81
+    - path: model/artifacts/catboost_churn.cbm
+      hash: md5
+      md5: 88158cda020be54015afded170a443c5
+      size: 147660
+    - path: model/artifacts/logreg_challenger.calibration.json
+      hash: md5
+      md5: d03922ec6897f34eda75bea689442487
+      size: 81
+    - path: model/artifacts/logreg_challenger.json
+      hash: md5
+      md5: 1a729f3729de97c14a793e8e0c79ce80
+      size: 6149
+    - path: model/artifacts/training_metadata.json
+      hash: md5
+      md5: 4c92c9ff8a8cae606d3f53edb2dbf872
+      size: 3166
+  evaluate:
+    cmd: python model/training/evaluate.py
+    deps:
+    - path: data/Telco-Customer-Churn.csv
+      hash: md5
+      md5: 0f9de68e012bd3aed5fa7cdc9fc421af
+      size: 977501
+    - path: model/artifacts/catboost_churn.calibration.json
+      hash: md5
+      md5: d03922ec6897f34eda75bea689442487
+      size: 81
+    - path: model/artifacts/catboost_churn.cbm
+      hash: md5
+      md5: 88158cda020be54015afded170a443c5
+      size: 147660
+    - path: model/artifacts/logreg_challenger.json
+      hash: md5
+      md5: 1a729f3729de97c14a793e8e0c79ce80
+      size: 6149
+    - path: model/training/common.py
+      hash: md5
+      md5: 1517599ab69049e6f101039cce3019ee
+      size: 10162
+    - path: model/training/evaluate.py
+      hash: md5
+      md5: e3423d73af9d2ae8d123c527b41aee9c
+      size: 20215
+    params:
+      params.yaml:
+        bootstrap:
+          n_resamples: 2000
+          seed: 0
+        calibration.reliability_bins: 10
+        cv:
+          folds: 5
+          seed: 42
+          inner_early_stopping_size: 0.15
+        evaluation:
+          decision_threshold: 0.38
+        models:
+          catboost:
+            depth: 4
+            learning_rate: 0.03
+            l2_leaf_reg: 10
+            bagging_temperature: 0
+            max_iterations: 3000
+            early_stopping_rounds: 100
+            seed: 42
+            class_weight:
+          lightgbm:
+            learning_rate: 0.03
+            num_leaves: 15
+            min_child_samples: 40
+            subsample: 0.8
+            subsample_freq: 1
+            colsample_bytree: 0.8
+            reg_lambda: 5.0
+            max_iterations: 3000
+            early_stopping_rounds: 100
+            seed: 42
+          logistic_regression:
+            C: 1.0
+            max_iter: 2000
+        slices:
+          columns:
+          - SeniorCitizen
+          - TenureGroup
+          - Contract
+          - InternetService
+          min_rows: 50
+          max_auc_gap: 0.05
+          max_calibration_gap: 0.05
+          max_recall_gap: 0.15
+    outs:
+    - path: docs/evaluation.json
+      hash: md5
+      md5: 4fce93c58dc54a9de309d9bcb9172aa4
+      size: 25191
+    - path: docs/model_comparison.md
+      hash: md5
+      md5: ff5a4c655e39d409cbffa129e0cd8ea0
+      size: 4517
+    - path: docs/reliability_diagram.png
+      hash: md5
+      md5: a86471f8823809456efc4476fd70c492
+      size: 116054
+    - path: docs/slice_metrics.md
+      hash: md5
+      md5: 160d808ed2d793be7026be65d5305bc7
+      size: 2604
+    - path: metrics.json
+      hash: md5
+      md5: 87a553c8d85e1567adad08d19ceca711
+      size: 477
+  threshold_analysis:
+    cmd: python model/training/threshold_analysis.py
+    deps:
+    - path: data/Telco-Customer-Churn.csv
+      hash: md5
+      md5: 0f9de68e012bd3aed5fa7cdc9fc421af
+      size: 977501
+    - path: model/artifacts/catboost_churn.calibration.json
+      hash: md5
+      md5: d03922ec6897f34eda75bea689442487
+      size: 81
+    - path: model/artifacts/catboost_churn.cbm
+      hash: md5
+      md5: 88158cda020be54015afded170a443c5
+      size: 147660
+    - path: model/training/threshold_analysis.py
+      hash: md5
+      md5: f2ea339715ad89ca4ea614c11d2ef36d
+      size: 9362
+    params:
+      params.yaml:
+        bootstrap:
+          n_resamples: 2000
+          seed: 0
+        calibration:
+          methods:
+          - identity
+          - platt
+          - isotonic
+          folds: 5
+          seed: 42
+          selection_metric: log_loss
+          reliability_bins: 10
+        threshold:
+          horizon_months: 12
+          primary_scenario: margin_with_incentive
+          scenarios:
+            margin_with_incentive:
+              offer_cost: 50.0
+              save_rate: 0.3
+              margin: 0.5
+            revenue_cheap:
+              offer_cost: 20.0
+              save_rate: 0.3
+              margin: 1.0
+          grid_start: 0.05
+          grid_stop: 0.95
+          grid_step: 0.01
+          sensitivity_offer_cost:
+          - 25
+          - 50
+          - 100
+          sensitivity_save_rate:
+          - 0.1
+          - 0.3
+          - 0.5
+    outs:
+    - path: docs/threshold_analysis.json
+      hash: md5
+      md5: e7e7b212956871ec5b8690072cafbd2b
+      size: 10155
+  dataset_report:
+    cmd: python model/training/build_dataset_report.py
+    deps:
+    - path: data/Telco-Customer-Churn.csv
+      hash: md5
+      md5: 0f9de68e012bd3aed5fa7cdc9fc421af
+      size: 977501
+    - path: data/dataset_catalog.json
+      hash: md5
+      md5: 57b20ba880c9dd2fa6f88e6712957bce
+      size: 1170
+    - path: model/training/build_dataset_report.py
+      hash: md5
+      md5: 2258fe66e7c246372fbb9f6fcc741394
+      size: 2258
+    - path: model/training/dataset_registry.py
+      hash: md5
+      md5: edee638a492f18a3b19e032de5b6198f
+      size: 3700
+    outs:
+    - path: data/dataset_report.md
+      hash: md5
+      md5: 8a31cc0688e0003b9fcb5fa073dd3788
+      size: 864
+  ci_golden:
+    cmd: python scripts/make_ci_sample.py --golden
+    deps:
+    - path: data/ci_sample.csv
+      hash: md5
+      md5: 46fc33763a31044d8d10ac1539511af9
+      size: 68032
+    - path: model/artifacts/catboost_churn.calibration.json
+      hash: md5
+      md5: d03922ec6897f34eda75bea689442487
+      size: 81
+    - path: model/artifacts/catboost_churn.cbm
+      hash: md5
+      md5: 88158cda020be54015afded170a443c5
+      size: 147660
+    - path: scripts/make_ci_sample.py
+      hash: md5
+      md5: b51019d2673d34c8c937132c62d63b83
+      size: 5605
+    outs:
+    - path: data/ci_sample_golden.json
+      hash: md5
+      md5: a3eb3b0edfcdfb5351c32524c2af5046
+      size: 8701

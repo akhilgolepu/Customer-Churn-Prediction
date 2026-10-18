@@ -1,0 +1,25 @@
+# Install once: pip install -r requirements-dev.txt && pre-commit install
+# Hooks only check; none of them rewrites files (the repo keeps CRLF line endings).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+        exclude: ^frontend/
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=2000]
+      - id: detect-private-key
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.21
+    hooks:
+      - id: ruff-check
+        files: ^(backend|model|scripts)/
+  - repo: local
+    hooks:
+      - id: mypy-backend
+        name: mypy (backend, non-strict)
+        entry: python -m mypy backend
+        language: system
+        pass_filenames: false
+        files: ^backend/.*\.py$

@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session, sessionmaker
 class PostgresSessionFactory:
     def __init__(self, dsn: str) -> None:
         self._engine = create_engine(dsn, pool_pre_ping=True)
-        self._session_maker = sessionmaker(bind=self._engine, autoflush=False, autocommit=False)
+        # expire_on_commit=False: repositories read values after session_scope() has
+        # committed and closed; with the default, every such read raised
+        # DetachedInstanceError (the Postgres path could not even start).
+        self._session_maker = sessionmaker(
+            bind=self._engine, autoflush=False, autocommit=False, expire_on_commit=False
+        )
 
     @property
     def engine(self):

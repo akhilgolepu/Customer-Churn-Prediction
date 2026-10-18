@@ -53,3 +53,33 @@ def test_abort_canary_does_not_demote_a_healthy_active_model(tmp_path, monkeypat
     assert active_id == v2["id"]
     assert shadow_id is None
     assert repo.get(v3["id"]).status == "rejected"
+
+
+def test_abort_canary_through_the_app_on_the_configured_backend(tmp_path, monkeypatch):
+    """Regression (Postgres): the stage CHECK constraint did not allow 'rejected',
+    so the automatic rollback raised and the bad candidate stayed in shadow.
+    Runs against whichever DATABASE_BACKEND the suite uses."""
+    from fastapi.testclient import TestClient
+
+    from core.settings import get_settings
+
+    monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setenv("CHALLENGER_ENABLED", "false")
+    monkeypatch.setattr(registry_module, "switch_shadow_model", lambda path: None)
+    monkeypatch.setattr(registry_module, "switch_active_model", lambda path: None)
+    get_settings.cache_clear()
+    try:
+        from app_factory import create_app
+
+        with TestClient(create_app()) as client:
+            service = client.app.state.model_registry_service
+            candidate = service.register_candidate("v3", {}, "model/c.cbm")
+            service.start_shadow_test(candidate["id"])
+            result = service.abort_canary("disagreement too high")
+            registry = service.list_registry()
+        assert result["rejected_model_id"] == candidate["id"]
+        assert registry["shadow_model_id"] is None
+        assert next(v for v in registry["versions"] if v["id"] == candidate["id"])["status"] == "rejected"
+    finally:
+        get_settings.cache_clear()
+

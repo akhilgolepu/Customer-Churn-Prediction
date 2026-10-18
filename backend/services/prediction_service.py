@@ -1,3 +1,4 @@
+import logging
 import asyncio
 import math
 import time
@@ -12,8 +13,11 @@ from feature_engineering import engineer_features
 from model_loader import explain as explain_model
 from model_loader import predict_proba
 from model_loader import predict_shadow_proba
+from core import prometheus
 from repositories.prediction_repository import PredictionHistoryItem, PredictionRepository
 from schemas.prediction import PredictionRequest
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -100,14 +104,16 @@ class PredictionService:
             try:
                 reason = (self._canary_service.snapshot().get("last_rollback_reason") if self._canary_service else None) or "canary disagreement"
                 self._model_registry_service.abort_canary(reason)
-            except Exception:   # nosec B110
-                # Rollback attempts should not fail prediction path.
-                pass
+            except Exception:
+                # A failed rollback must not fail the prediction, but it must be
+                # visible: on Postgres it used to fail silently (stage constraint).
+                logger.exception("Automatic canary rollback failed")
             finally:
                 if self._canary_service is not None:
                     self._canary_service.disable()
 
         is_churn = probability >= threshold
+        prometheus.observe_prediction(variant, probability, is_churn, rollback_triggered)
 
         self._repo.add(
             PredictionHistoryItem(

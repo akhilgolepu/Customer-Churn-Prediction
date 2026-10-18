@@ -1,7 +1,9 @@
-"""Locust load test for POST /api/v1/predictions/predict.
+"""Locust load test for POST /api/v1/predictions/predict and /explain.
 
 Each simulated user posts a real customer row sampled from the Telco dataset
-so the model sees realistic feature variety (not one cached payload).
+(or the synthetic CI sample when the DVC dataset is absent) so the model sees
+realistic feature variety (not one cached payload). Mix: 4 predict : 1 explain
+(EXPLAIN_WEIGHT=0 disables explain).
 
 Run against a local server (see loadtest/run_loadtest.sh):
     locust -f loadtest/locust_predict.py --headless -u 20 -r 5 -t 60s \
@@ -14,13 +16,16 @@ so start the server under test with PREDICT_RATE_LIMIT_PER_MINUTE set high.
 
 from __future__ import annotations
 
+import os
 import random
 from pathlib import Path
 
 import pandas as pd
 from locust import HttpUser, between, task
 
-DATA = Path(__file__).resolve().parents[1] / "data" / "Telco-Customer-Churn.csv"
+_ROOT = Path(__file__).resolve().parents[1]
+DATA = next(p for p in (_ROOT / "data" / "Telco-Customer-Churn.csv", _ROOT / "data" / "ci_sample.csv") if p.exists())
+EXPLAIN_WEIGHT = int(os.environ.get("EXPLAIN_WEIGHT", "1"))
 
 _FIELDS = [
     "MonthlyCharges", "tenure", "TotalCharges", "SeniorCitizen", "Partner", "Dependents",
@@ -50,7 +55,7 @@ class PredictUser(HttpUser):
     # Short think time: this is a throughput/latency probe, not a UI simulation.
     wait_time = between(0.05, 0.2)
 
-    @task
+    @task(4)
     def predict(self) -> None:
         payload = random.choice(PAYLOADS)
         with self.client.post(
@@ -63,3 +68,17 @@ class PredictUser(HttpUser):
                 resp.failure(f"HTTP {resp.status_code}: {resp.text[:120]}")
             elif "probability" not in resp.json():
                 resp.failure("missing probability in response")
+
+    @task(EXPLAIN_WEIGHT)
+    def explain(self) -> None:
+        payload = random.choice(PAYLOADS)
+        with self.client.post(
+            "/api/v1/predictions/explain",
+            json=payload,
+            name="POST /api/v1/predictions/explain",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code != 200:
+                resp.failure(f"HTTP {resp.status_code}: {resp.text[:120]}")
+            elif not resp.json().get("top_drivers"):
+                resp.failure("missing top_drivers in response")

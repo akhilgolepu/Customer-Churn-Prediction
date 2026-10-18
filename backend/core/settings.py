@@ -110,6 +110,10 @@ class Settings(BaseSettings):
     challenger_artifact_path: str = "model/artifacts/logreg_challenger.json"
     challenger_version: str = "logreg-challenger"
 
+    # GET /metrics (Prometheus). Public unless METRICS_TOKEN is set, then it needs
+    # "Authorization: Bearer <token>" (Prometheus: authorization.credentials).
+    metrics_token: str | None = None
+
     canary_enabled: bool = False
     canary_traffic_percent: int = 10
     canary_min_samples: int = 100
@@ -157,4 +161,4 @@ def get_settings() -> Settings:
     # Must be passed by its validation alias: allowed_origins is declared with
     # validation_alias="ALLOWED_ORIGINS_INTERNAL", so Settings(allowed_origins=...)
     # was silently ignored and ALLOWED_ORIGINS never took effect.
-    return Settings(ALLOWED_ORIGINS_INTERNAL=allowed_origins)
+    return Settings(ALLOWED_ORIGINS_INTERNAL=allowed_origins)  # type: ignore[call-arg]  # pydantic validation_alias

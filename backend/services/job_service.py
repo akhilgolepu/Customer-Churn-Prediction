@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from core.settings import get_settings
+from model.data_schema import validate_frame
 from repositories.job_repository import JobItem, JobRepository
 from schemas.prediction import PredictionRequest
 from storage.adapters import ObjectStorage, random_object_key
@@ -187,6 +188,11 @@ class JobService:
         missing_columns = sorted(required_columns - incoming_columns)
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
+        # Validate every row up front (pandera, model/data_schema.py) so a bad
+        # file fails with the full list of problems, not the first bad row.
+        errors = validate_frame(frame[list(PredictionRequest.model_fields.keys())])
+        if errors:
+            raise ValueError("Batch file failed validation: " + "; ".join(errors))
 
         results = []
         risk_counts = {"low": 0, "medium": 0, "high": 0}
@@ -244,7 +250,9 @@ class SchedulerService:
     def __init__(self, job_service: JobService, monitoring_service=None) -> None:
         self._job_service = job_service
         self._monitoring_service = monitoring_service
-        self._last_retrain_enqueue_ts: float = 0.0
+        # Counted from startup. (It started at 0.0, so the 24 h "scheduled_interval"
+        # retrain fired on the first poll after every restart, drift or not.)
+        self._last_retrain_enqueue_ts: float = time.time()
 
     async def quality_check_loop(self) -> None:
         settings = get_settings()
@@ -262,33 +270,40 @@ class SchedulerService:
         settings = get_settings()
         while True:
             await asyncio.sleep(settings.schedule_retrain_poll_seconds)
+            await self.check_retraining_trigger()
 
-            if not settings.schedule_retraining_enabled:
-                continue
+    async def check_retraining_trigger(self, now: float | None = None) -> dict | None:
+        """One scheduler poll: enqueue a retraining job on drift alerts (or the forced
+        interval), respecting the cooldown. Returns the enqueued payload, else None."""
+        settings = get_settings()
+        if not settings.schedule_retraining_enabled:
+            return None
 
-            now = time.time()
-            cooldown_elapsed = (now - self._last_retrain_enqueue_ts) >= settings.schedule_retrain_cooldown_seconds
-            if not cooldown_elapsed:
-                continue
+        now = time.time() if now is None else now
+        if (now - self._last_retrain_enqueue_ts) < settings.schedule_retrain_cooldown_seconds:
+            return None
 
-            reason = None
-            if self._monitoring_service is not None:
-                snapshot = self._monitoring_service.snapshot()
-                alerts = snapshot.get("alerts", []) if isinstance(snapshot, dict) else []
-                if alerts:
-                    reason = "drift_alert"
+        reason = None
+        alerts: list = []
+        if self._monitoring_service is not None:
+            snapshot = self._monitoring_service.snapshot()
+            alerts = snapshot.get("alerts", []) if isinstance(snapshot, dict) else []
+            if alerts:
+                reason = "drift_alert"
 
-            if reason is None and settings.schedule_retrain_force_interval_seconds > 0:
-                if (now - self._last_retrain_enqueue_ts) >= settings.schedule_retrain_force_interval_seconds:
-                    reason = "scheduled_interval"
+        if reason is None and settings.schedule_retrain_force_interval_seconds > 0:
+            if (now - self._last_retrain_enqueue_ts) >= settings.schedule_retrain_force_interval_seconds:
+                reason = "scheduled_interval"
 
-            if reason is None:
-                continue
+        if reason is None:
+            return None
 
-            payload = {
-                "reason": reason,
-                "source": "scheduler",
-                "auto_promote": False,
-            }
-            await self._job_service.enqueue_simple_job("retraining", payload=payload)
-            self._last_retrain_enqueue_ts = now
+        payload = {
+            "reason": reason,
+            "source": "scheduler",
+            "auto_promote": False,
+            "alerts": alerts,
+        }
+        await self._job_service.enqueue_simple_job("retraining", payload=payload)
+        self._last_retrain_enqueue_ts = now
+        return payload

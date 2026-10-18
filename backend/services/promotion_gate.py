@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
-from backend.services.model_validation_service import ModelValidationGate
+from services.model_validation_service import ModelValidationGate
 
 # scorer(artifact_path) -> predict_fn(features_frame) -> calibrated P(churn) per row
 Scorer = Callable[[str], Callable[[pd.DataFrame], np.ndarray]]
