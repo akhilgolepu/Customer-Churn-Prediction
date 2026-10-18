@@ -34,7 +34,7 @@ v3 offline metrics (measured on the held-out split): ROC-AUC 0.6424, Brier 0.193
 - versions: v1=archived, v2=active, v3=candidate
 
 - v3: canary auto-rolled back after **60** requests
-- v3 canary: 10 requests served by the candidate, 20 disagreements, rate **33.3%** (limit 20%)
+- v3 canary: 9 requests served by the candidate, 20 disagreements, rate **33.3%** (limit 20%)
 - last rollback reason: _Canary disagreement rate 0.333 exceeded threshold 0.200_
 
 **Registry after canary rollback**

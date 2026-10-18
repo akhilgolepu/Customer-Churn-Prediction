@@ -47,7 +47,8 @@ from common import (  # noqa: E402
     three_way_split,
 )
 
-from model.calibration import Calibrator  # noqa: E402
+from model.calibration import Calibrator, load_for_model  # noqa: E402
+from model.linear_model import LinearChurnModel  # noqa: E402
 
 DOCS = REPO_ROOT / "docs"
 LABELS = {
@@ -98,6 +99,24 @@ def shipped_scores(ds, split, params):
     calibrator = Calibrator.load(REPO_ROOT / params["output"]["calibration_path"])
     raw = model.predict_proba(ds.x.iloc[split.test])[:, 1]
     return raw, calibrator.transform(raw), calibrator
+
+
+def challenger_report(ds, split, params, p_active, thr) -> dict:
+    """Shipped CatBoost vs the shipped logistic-regression challenger on the test split."""
+    from scipy.stats import spearmanr
+
+    path = REPO_ROOT / params["output"]["challenger_path"]
+    p_chal = load_for_model(path).transform(LinearChurnModel.load(path).predict_proba(ds.x.iloc[split.test]))
+    y = ds.y.iloc[split.test].to_numpy()
+    boot = params["bootstrap"]
+    return {
+        "challenger": prob_metrics(y, p_chal),
+        "active": prob_metrics(y, p_active),
+        "active_minus_challenger": paired_bootstrap(y, p_active, p_chal, boot["n_resamples"], boot["seed"]),
+        "disagreement_rate_at_threshold": float(((p_active >= thr) != (p_chal >= thr)).mean()),
+        "spearman": float(spearmanr(p_active, p_chal)[0]),
+        "threshold": thr,
+    }
 
 
 def reliability(y, p, bins: int) -> dict:
@@ -216,7 +235,7 @@ def fmt_diff(d: dict) -> str:
     return f"{d['diff']:+.4f} [{d['ci_low']:+.4f}, {d['ci_high']:+.4f}]"
 
 
-def write_comparison_md(path, cv_summary, cv_diffs, test_metrics, test_diffs, shipped, cal, params, n_dev, n_test):
+def write_comparison_md(path, cv_summary, cv_diffs, test_metrics, test_diffs, shipped, cal, params, n_dev, n_test, chal):
     lines = [
         "# Model comparison",
         "",
@@ -274,6 +293,23 @@ def write_comparison_md(path, cv_summary, cv_diffs, test_metrics, test_diffs, sh
     ]
     for name, diffs in test_diffs.items():
         lines.append(f"| {LABELS.get(name, name)} | " + " | ".join(fmt_diff(diffs[m]) for m in PROB_METRICS) + " |")
+    d = chal["active_minus_challenger"]
+    lines += [
+        "",
+        "## Standing challenger: shipped CatBoost vs shipped logistic regression (test split)",
+        "",
+        "Both trained on the train split only, calibration chosen on validation. The API keeps the logistic-regression "
+        "artifact in the shadow slot (`CHALLENGER_ENABLED`), so this is what the canary disagreement counter measures live.",
+        "",
+        "| Model | ROC-AUC | PR-AUC | Brier | Log loss |",
+        "|---|---:|---:|---:|---:|",
+        "| CatBoost (active) | " + " | ".join(f"{chal['active'][m]:.4f}" for m in PROB_METRICS) + " |",
+        "| Logistic regression (challenger) | " + " | ".join(f"{chal['challenger'][m]:.4f}" for m in PROB_METRICS) + " |",
+        "| Δ active minus challenger [95% CI] | " + " | ".join(fmt_diff(d[m]) for m in PROB_METRICS) + " |",
+        "",
+        f"Decisions disagree at threshold {chal['threshold']:.2f} on {chal['disagreement_rate_at_threshold']:.1%} of test "
+        f"customers; Spearman rank correlation of the two scores is {chal['spearman']:.3f}.",
+    ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -349,8 +385,9 @@ def main() -> None:
     slices = slice_report(ds, split, cal_te, thr, params)
 
     DOCS.mkdir(exist_ok=True)
+    chal = challenger_report(ds, split, params, cal_te, thr)
     write_comparison_md(DOCS / "model_comparison.md", cv_summary, cv_diffs, test_metrics, test_diffs, shipped,
-                        calibrator, params, len(split.dev), len(split.test))
+                        calibrator, params, len(split.dev), len(split.test), chal)
     write_slices_md(DOCS / "slice_metrics.md", slices)
 
     evaluation = {
@@ -366,6 +403,7 @@ def main() -> None:
             "at_decision_threshold": at_threshold(y_te, cal_te, thr),
             "roc_auc_ci": bootstrap_ci(y_te, cal_te, "roc_auc", boot["n_resamples"], boot["seed"]),
         },
+        "challenger_test": chal,
         "reliability_test": rel,
         "slices_test": slices,
     }

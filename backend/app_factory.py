@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any  # Imported for clean static type coordination
 
@@ -49,6 +51,22 @@ from services.promotion_gate import PromotionGate
 from services.recommendation_service import RecommendationService
 from services.retraining_service import RetrainingOrchestrator
 from storage.factory import build_object_storage
+
+def _attach_challenger(model_registry_service: ModelRegistryService, settings) -> None:
+    logger = logging.getLogger(__name__)
+    path = Path(settings.challenger_artifact_path)
+    resolved = path if path.is_absolute() else Path(__file__).resolve().parents[1] / path
+    if not resolved.exists():
+        logger.warning("CHALLENGER_ENABLED but %s does not exist; run model/training/train.py", resolved)
+        return
+    try:
+        metrics = json.loads(resolved.read_text(encoding="utf-8")).get("metrics", {})
+    except (OSError, ValueError):
+        metrics = {}
+    model_registry_service.ensure_challenger(
+        settings.challenger_artifact_path, settings.challenger_version, metrics=metrics
+    )
+
 
 @dataclass
 class AppState:
@@ -134,6 +152,11 @@ def create_app() -> FastAPI:
     model_registry_service = ModelRegistryService(
         repo=model_registry_repo, audit_service=audit_service, promotion_gate=promotion_gate
     )
+    # Serve what the registry says (it outlives the process), then attach the
+    # standing challenger to the shadow slot if it is free.
+    model_registry_service.sync_runtime()
+    if settings.challenger_enabled:
+        _attach_challenger(model_registry_service, settings)
     canary_service = CanaryRolloutService(
         enabled=settings.canary_enabled,
         traffic_percent=settings.canary_traffic_percent,

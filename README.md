@@ -13,13 +13,14 @@ how to reproduce it, and what was not verified.
 | Area | Status |
 |---|---|
 | Model quality | Test ROC-AUC 0.846 (95% CI 0.824 to 0.868). **Does not beat logistic regression**: CV difference -0.0008 (95% CI -0.0034 to +0.0018); LightGBM is no better either ([comparison](docs/model_comparison.md)). |
+| Challenger | CatBoost stays active; logistic regression runs as a standing challenger in the shadow slot, scored on every request. Test: AUC difference +0.0010 (95% CI -0.0041 to +0.0059), decisions differ for 3.4% of customers ([ADR 0001](docs/decisions/0001-catboost-active-logreg-challenger.md)). |
 | Evaluation hygiene | 60/20/20 train/validation/test split; early stopping, calibration and threshold use validation only; test reported once ([`train.py`](model/training/train.py), [`evaluate.py`](model/training/evaluate.py), [`params.yaml`](params.yaml)). |
 | Calibration | Served score is a calibrated probability: test Brier 0.135, ECE 0.018 ([reliability diagram](docs/reliability_diagram.png)). Achieved by dropping the class weight; Platt/isotonic did not improve on it. |
-| Decision threshold | Default **0.38**, chosen on validation from a stated cost assumption; closed-form break-even 0.371. Assumption-dependent: [details](#decision-threshold). |
+| Decision threshold | Default **0.38**, chosen on validation from a stated cost assumption; closed-form break-even 0.371. Its gain over an untuned 0.50 cut-off is **not statistically distinguishable** on test (+$716 per 1,000, 95% CI -$421 to +$1,888): [details](#decision-threshold). |
 | Promotion gate | `POST /models/promote` runs `ModelValidationGate`; blockers give HTTP 409, admin override requires a reason and is audit-logged. |
 | Auth | Seeded passwords come from environment variables; production refuses to start with defaults. The frontend ships only the public analyst/viewer demo logins, no admin credentials. |
 | Slices / model card | Calibration holds in every slice; seniors have lower within-group AUC ([model card](docs/model_card.md), [slices](docs/slice_metrics.md)). |
-| Load test | Done on the **previous** (class-weighted) model: 135 req/s, p95 41 ms at 20 users on one worker, 2 vCPU ([details](docs/loadtest_results.md)). Not re-run on the calibrated model; not measured on the deployed host. |
+| Load test | Done on the **previous** (class-weighted) model: 135 req/s, p95 41 ms at 20 users on one worker, 2 vCPU ([details](docs/loadtest_results.md)). Not re-run on the calibrated model or with the challenger attached (every request now scores two models); not measured on the deployed host. |
 | Shadow/canary + rollback | Exercised end to end with a healthy and a degraded candidate, including a gate refusal ([transcript](docs/demo_shadow_rollback.md)). |
 | Training/serving parity | Guarded by a test that runs in CI ([`test_feature_parity.py`](backend/tests/test_feature_parity.py)). |
 | Live backend | **Not deployed yet.** Render Blueprint and a verification script are included; fill in the URL below once deployed. |
@@ -63,7 +64,8 @@ What this does and does not say:
 - **Nothing beats logistic regression.** Paired bootstrap on pooled out-of-fold scores, CatBoost minus
   logistic regression: ROC-AUC -0.0008 [-0.0034, +0.0018], Brier +0.0002 [-0.0011, +0.0013]. LightGBM:
   ROC-AUC -0.0038 [-0.0076, -0.0001]. CatBoost stays because the serving, SHAP and canary code are built
-  around it, not because it scores better.
+  around it, not because it scores better, and logistic regression is kept running next to it as a live
+  challenger (see [below](#active-model-and-standing-challenger)).
 - **The score is a calibrated probability.** The old recipe's balanced class weight (2.77) bought no
   ranking (+0.0010 [-0.0016, +0.0037] AUC) and pushed scores up (Brier +0.026, ECE 0.146 on test), so it
   was dropped. Calibration was then chosen on validation by 5-fold cross-fitting (lowest log loss among
@@ -110,8 +112,13 @@ Net benefit per 1,000 customers on the held-out split (primary scenario):
 | Threshold 0.38 (new default) | 31.4% | 0.580 | 0.687 | **$8,858** |
 | Closed form 0.371 | 32.0% | 0.581 | 0.701 | $9,052 |
 
-- 0.62 was tuned on the old, upward-biased scores; on calibrated scores it flags too few customers. The
-  gain of 0.38 over 0.62 on test is +$2,999 per 1,000 (95% bootstrap CI +$1,431 to +$4,682).
+- **Gain over the untuned baseline is not significant.** Against a plain 0.50 cut-off, 0.38 earns
+  +$716 per 1,000 customers on test (95% bootstrap CI -$421 to +$1,888). With 1,409 test rows that is
+  indistinguishable from zero; the curve is flat between roughly 0.35 and 0.50. What the analysis
+  establishes is the *region* of good thresholds under the stated economics, not a precise optimum.
+- 0.62 (the previous default) is not a fair baseline: it was tuned on the old class-weighted model's
+  upward-biased scores. On calibrated scores it flags too few customers; 0.38 beats it by +$2,999 per
+  1,000 (95% CI +$1,431 to +$4,682), which mostly measures that mismatch.
 - **Empirical vs closed form.** The closed-form threshold assumes perfectly calibrated scores and an
   infinite sample; the empirical one maximises a step function on 1,409 validation rows. The net-benefit
   curve is flat around the optimum (validation: $8,732 at 0.35, $9,392 at 0.40, $8,843 at 0.45 per 1,000),
@@ -137,6 +144,28 @@ Net benefit per 1,000 customers on the held-out split (primary scenario):
 Override per request (`?threshold=0.4`) or per deployment (`DECISION_THRESHOLD=0.4`). `params.yaml`
 `evaluation.decision_threshold` must equal the API default (a test enforces it). The UI's
 low/medium/high risk tiers use fixed cut-offs (0.33 / 0.66) and are independent of this threshold.
+
+## Active model and standing challenger
+
+Because the two models tie, the simpler one is not thrown away: `train.py` also trains logistic
+regression on the same split (calibration chosen the same way; identity won again) and exports it as
+JSON (`model/artifacts/logreg_challenger.json`: coefficients, imputation medians, scaling and one-hot
+weights, scored with numpy, no pickles). At startup the API attaches it to the shadow slot whenever no
+other candidate is being tested (`CHALLENGER_ENABLED=true`, default), so every `/predict` also returns
+the challenger's `shadowProbability` and `GET /api/v1/system/canary` counts how often the two disagree
+on live traffic. Shipped artifacts on the test split (`python model/training/evaluate.py`):
+
+| | ROC-AUC | PR-AUC | Brier | Log loss |
+|---|---:|---:|---:|---:|
+| CatBoost (active) | 0.8464 | 0.6655 | 0.1350 | 0.4138 |
+| Logistic regression (challenger) | 0.8454 | 0.6517 | 0.1361 | 0.4159 |
+| Active minus challenger [95% CI] | +0.0010 [-0.0041, +0.0059] | +0.0138 [-0.0024, +0.0297] | -0.0011 [-0.0034, +0.0010] | -0.0022 [-0.0082, +0.0041] |
+
+Their decisions differ at threshold 0.38 for 3.4% of test customers (Spearman 0.985). Promoting the
+challenger is one gated `POST /models/promote`; `/explain` then returns exact linear log-odds
+contributions instead of TreeSHAP. Shadow-testing another candidate displaces the challenger until the
+next startup; a challenger rejected by the canary is not re-attached. Rationale and trade-offs:
+[ADR 0001](docs/decisions/0001-catboost-active-logreg-challenger.md).
 
 ## Model lifecycle: candidate, gate, shadow, canary, rollback
 
@@ -181,10 +210,15 @@ python model/training/build_demo_candidates.py   # writes model/artifacts/demo/ 
 python scripts/demo_shadow_rollback.py --out docs/demo_shadow_rollback.md
 ```
 
-The degraded candidate's test AUC is 0.642, not 0.5. A model trained on shuffled labels learns nothing
-about churn but is still a random function of strongly predictive features, so its AUC against the
-true labels can land well away from 0.5 in either direction (here a Platt fit on the permuted labels
-flipped its sign). It is far below the healthy model either way, which is what the gate and canary need.
+The degraded candidate's test AUC is 0.642, not 0.5. This was checked, not assumed
+([docs/permutation_check.md](docs/permutation_check.md), `python model/training/permutation_check.py`):
+across 20 models trained on independently permuted labels, AUC against the true test labels averaged
+0.529 with SD 0.125 (range 0.241 to 0.735), while the same scores re-assigned to random rows give SD
+0.021 (theory: 0.017). Each permuted model's AUC tracks the correlation of its scores with the real
+model's scores (Pearson r = 0.977 over the 20 runs). A model fitted to noise learns no churn signal but
+is still a function of tenure, charges and contract, which are strongly predictive, so by chance it can
+rank churners above or below chance (here a Platt fit on the permuted labels flipped its sign). It is
+far below the healthy model either way, which is what the gate and canary need.
 
 Running the original demo exposed two real defects in the canary code, fixed earlier and covered by
 regression tests:
@@ -216,7 +250,11 @@ Each is fixed and has a regression test.
    working. The cache was removed (`test_changed_password_takes_effect_immediately`).
 5. **Production checks could never fire on Render.** `render.yaml` did not set `ENVIRONMENT`, so a deployed
    API ran as `development`. The Blueprint now sets `ENVIRONMENT=production`.
-6. Minor: the threshold analysis valued a saved customer with the mean monthly charge of churners over
+6. **Registry and runtime diverged after a restart.** The registry persists (SQLite file or Postgres)
+   but the runtime always started from the default artifact, so after a promotion and a restart the API
+   reported v2 as active while serving v1. Startup now loads the registry's active and shadow artifacts;
+   an unloadable active artifact aborts startup (`test_restart_serves_the_registry_active_model`).
+7. Minor: the threshold analysis valued a saved customer with the mean monthly charge of churners over
    the whole dataset, test labels included. It now uses train+validation only.
 
 ## Architecture
@@ -302,10 +340,10 @@ pip install -r requirements.txt     # tests need the full set (mlflow, pytest, h
 pytest -q backend/tests
 ```
 
-Last run (Python 3.13, dataset present): **94 passed, 7 skipped**. The 7 skips are Evidently drift
+Last run (Python 3.13, dataset present): **105 passed, 7 skipped**. The 7 skips are Evidently drift
 tests, skipped because Evidently is not installed in this environment; I have not run them. CI does not
 have the DVC-tracked CSV, so the tests that replay dataset rows skip there; the feature-parity, canary,
-gate, auth, calibration, registry, settings and CORS tests do not need it.
+gate, auth, calibration, challenger, registry, settings and CORS tests do not need it.
 
 ### Reproducing the other measurements
 
@@ -314,6 +352,7 @@ python model/training/train.py                       # model + calibration + tra
 python model/training/evaluate.py                    # docs/model_comparison.md, slice_metrics.md, reliability_diagram.png, evaluation.json, metrics.json
 python model/training/threshold_analysis.py          # docs/threshold_analysis.json
 python model/training/build_demo_candidates.py       # healthy + degraded demo models
+python model/training/permutation_check.py           # 20 permuted-label models -> docs/permutation_check.md (~3 min)
 python scripts/demo_shadow_rollback.py               # gate + shadow -> rollback demo
 bash loadtest/run_loadtest.sh 20 5 60s               # Locust (needs `pip install locust`; use Git Bash/WSL on Windows)
 ```
@@ -358,7 +397,8 @@ on that environment in the repository settings. Secrets: `RENDER_DEPLOY_HOOK_URL
 `ENVIRONMENT` (`development`|`production`), `SECRET_KEY`, `ADMIN_PASSWORD`, `ANALYST_PASSWORD`,
 `VIEWER_PASSWORD`, `ALLOWED_ORIGINS` (JSON list or comma-separated), `DECISION_THRESHOLD`,
 `PROMOTION_EVAL_DATA_PATH`, `PROMOTION_MIN_AUC`, `PROMOTION_MIN_PRECISION`, `PROMOTION_MIN_RECALL`,
-`PROMOTION_MIN_F1`, `PROMOTION_MAX_AUC_DROP`, `DATABASE_BACKEND` (`sqlite`|`postgres`), `POSTGRES_URL`,
+`PROMOTION_MIN_F1`, `PROMOTION_MAX_AUC_DROP`, `CHALLENGER_ENABLED`, `CHALLENGER_ARTIFACT_PATH`,
+`CHALLENGER_VERSION`, `DATABASE_BACKEND` (`sqlite`|`postgres`), `POSTGRES_URL`,
 `REDIS_ENABLED`/`REDIS_URL`, `OBJECT_STORAGE_PROVIDER` (`none`|`local`|`s3`|`azure`) and its bucket
 settings, `CANARY_ENABLED`, `CANARY_TRAFFIC_PERCENT`, `CANARY_MIN_SAMPLES`,
 `CANARY_MAX_DISAGREEMENT_RATE`, `CANARY_ROLLBACK_COOLDOWN_SECONDS`, `PREDICT_RATE_LIMIT_PER_MINUTE`,

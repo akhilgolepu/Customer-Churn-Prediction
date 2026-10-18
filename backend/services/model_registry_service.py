@@ -245,6 +245,59 @@ class ModelRegistryService:
             "shadow_model_id": shadow_model_id,
         }
 
+    def sync_runtime(self) -> None:
+        """Load the registry's active and shadow artifacts into the runtime.
+
+        The registry persists (SQLite file / Postgres) but the runtime always
+        starts from the default artifact, so without this a restart after a
+        promotion served the old model while the registry reported the new one.
+        An active artifact that cannot be loaded aborts startup; an unloadable
+        shadow is rejected (audited) so registry and runtime agree.
+        """
+        if not self._has_legacy:
+            return
+        active_id, shadow_id = self._repo.state()
+        active = self._repo.get(active_id) if active_id else None
+        if active is not None:
+            try:
+                switch_active_model(active.artifact_path)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Registry active model {active.version} ({active.artifact_path}) could not be loaded: {exc}"
+                ) from exc
+        if shadow_id:
+            shadow = self._repo.get(shadow_id)
+            try:
+                switch_shadow_model(shadow.artifact_path if shadow else None)
+            except Exception as exc:
+                logger.error("Shadow model could not be loaded at startup: %s", exc)
+                self.abort_canary(f"shadow artifact could not be loaded at startup: {exc}")
+
+    def ensure_challenger(self, artifact_path: str, version: str, metrics: Optional[dict] = None) -> Optional[str]:
+        """Put the standing challenger in the shadow slot when nothing else is being tested.
+
+        Returns the challenger's model id when it is (now) in shadow, else None.
+        A challenger that the canary rejected earlier is not re-attached.
+        """
+        if not self._has_legacy:
+            return None
+        active_id, shadow_id = self._repo.state()
+        versions = [v for v in self._repo.list_versions() if v.artifact_path == artifact_path]
+        if shadow_id:
+            return shadow_id if any(v.id == shadow_id for v in versions) else None
+        if any(v.id == active_id for v in versions):
+            return None  # the challenger was promoted; nothing to shadow
+        if any(v.status == "rejected" for v in versions):
+            logger.warning("Challenger %s was rejected earlier; not re-attaching it", artifact_path)
+            return None
+        existing = next((v for v in versions if v.status == "candidate"), None)
+        challenger_id = existing.id if existing else self.register_candidate(
+            version=version, metrics=metrics or {}, artifact_path=artifact_path
+        )["id"]
+        self.start_shadow_test(challenger_id)
+        self._audit("challenger_attached", challenger_id, {"version": version, "artifact_path": artifact_path})
+        return challenger_id
+
     def abort_canary(self, reason: str) -> dict:
         """Stop a failing shadow/canary candidate without touching the active model.
 

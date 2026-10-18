@@ -46,6 +46,9 @@ os.environ.update(
         "CANARY_ROLLBACK_COOLDOWN_SECONDS": "0",
         "PREDICT_RATE_LIMIT_PER_MINUTE": "100000000",
         "SCHEDULE_RETRAINING_ENABLED": "false",
+        # Keep the shadow slot free for the scripted candidates (the standing
+        # logistic-regression challenger would otherwise occupy it at startup).
+        "CHALLENGER_ENABLED": "false",
         "SQLITE_PATH": str(Path(_tmp) / "demo.db"),
     }
 )

@@ -45,3 +45,15 @@ Paired bootstrap on the test split, model minus logistic regression:
 | CatBoost, no class weight (shipped recipe) | -0.0009 [-0.0060, +0.0042] | +0.0102 [-0.0070, +0.0251] | -0.0006 [-0.0028, +0.0016] | +0.0002 [-0.0061, +0.0063] |
 | LightGBM | +0.0031 [-0.0032, +0.0098] | +0.0037 [-0.0142, +0.0210] | -0.0018 [-0.0045, +0.0009] | -0.0024 [-0.0098, +0.0047] |
 | Shipped artifact | +0.0015 [-0.0035, +0.0065] | +0.0163 [-0.0006, +0.0322] | -0.0015 [-0.0038, +0.0007] | -0.0027 [-0.0085, +0.0035] |
+
+## Standing challenger: shipped CatBoost vs shipped logistic regression (test split)
+
+Both trained on the train split only, calibration chosen on validation. The API keeps the logistic-regression artifact in the shadow slot (`CHALLENGER_ENABLED`), so this is what the canary disagreement counter measures live.
+
+| Model | ROC-AUC | PR-AUC | Brier | Log loss |
+|---|---:|---:|---:|---:|
+| CatBoost (active) | 0.8464 | 0.6655 | 0.1350 | 0.4138 |
+| Logistic regression (challenger) | 0.8454 | 0.6517 | 0.1361 | 0.4159 |
+| Δ active minus challenger [95% CI] | +0.0010 [-0.0041, +0.0059] | +0.0138 [-0.0024, +0.0297] | -0.0011 [-0.0034, +0.0010] | -0.0022 [-0.0082, +0.0041] |
+
+Decisions disagree at threshold 0.38 on 3.4% of test customers; Spearman rank correlation of the two scores is 0.985.

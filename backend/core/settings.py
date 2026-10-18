@@ -102,6 +102,14 @@ class Settings(BaseSettings):
     promotion_min_f1: float = 0.45
     promotion_max_auc_drop: float = 0.02
 
+    # Standing challenger: a logistic-regression model (model/linear_model.py)
+    # kept in the shadow slot whenever no other candidate is being tested. It is
+    # scored on every request; with CANARY_ENABLED it also serves that share of
+    # traffic. Relative paths resolve against the repository root.
+    challenger_enabled: bool = True
+    challenger_artifact_path: str = "model/artifacts/logreg_challenger.json"
+    challenger_version: str = "logreg-challenger"
+
     canary_enabled: bool = False
     canary_traffic_percent: int = 10
     canary_min_samples: int = 100

@@ -92,5 +92,7 @@ slices:
 output:
   model_path: model/artifacts/catboost_churn.cbm
   calibration_path: model/artifacts/catboost_churn.calibration.json
+  # Logistic-regression challenger served in the shadow slot (CHALLENGER_ENABLED).
+  challenger_path: model/artifacts/logreg_challenger.json
   training_metadata_path: model/artifacts/training_metadata.json
   metrics_path: metrics.json

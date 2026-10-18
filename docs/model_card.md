@@ -70,7 +70,10 @@ Comparison with alternatives (full tables in [model_comparison.md](model_compari
   (CatBoost with or without class weight, LightGBM) beats logistic regression;
   LightGBM is slightly worse out of fold (-0.0038, -0.0076 to -0.0001).
 - CatBoost is kept because the serving, SHAP and canary code are built around it,
-  not because it scores better.
+  not because it scores better. Logistic regression (same split, identity calibration)
+  runs next to it as a standing challenger in the API's shadow slot; on test the two
+  differ by +0.0010 ROC-AUC (-0.0041 to +0.0059) and disagree at the threshold for 3.4%
+  of customers. See [ADR 0001](decisions/0001-catboost-active-logreg-challenger.md).
 
 ## Calibration
 

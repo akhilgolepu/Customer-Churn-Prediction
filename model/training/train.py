@@ -5,6 +5,8 @@
   3. Calibration method chosen by cross-fitting on validation (identity vs
      Platt vs isotonic, lowest mean log loss), then refit on all of validation.
   4. Writes the model, its calibration file and training metadata.
+  5. Same split and calibration rule for the logistic-regression challenger,
+     exported as JSON (model/linear_model.py) for the API's shadow slot.
 
 The test split is not read here. evaluate.py reports on it once.
 
@@ -23,14 +25,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import (  # noqa: E402
     REPO_ROOT,
     fit_catboost,
+    fit_logistic_regression,
     ids_fingerprint,
     load_dataset,
     load_params,
+    predict,
     prob_metrics,
     three_way_split,
 )
 
-from model.calibration import Calibrator, cross_fit  # noqa: E402
+import numpy as np  # noqa: E402
+
+from model.calibration import Calibrator, calibration_path_for, cross_fit  # noqa: E402
+from model.linear_model import LinearChurnModel  # noqa: E402
 
 
 def select_calibration(raw_val, y_val, ccfg: dict) -> tuple[str, dict]:
@@ -41,6 +48,33 @@ def select_calibration(raw_val, y_val, ccfg: dict) -> tuple[str, dict]:
     metric = ccfg["selection_metric"]
     best = min(table, key=lambda m: table[m][metric])
     return best, table
+
+
+def train_challenger(ds, split, params) -> dict:
+    """Logistic regression on train, calibration chosen on validation, exported as JSON."""
+    x_tr, y_tr = ds.x.iloc[split.train], ds.y.iloc[split.train]
+    x_va, y_va = ds.x.iloc[split.val], ds.y.iloc[split.val].to_numpy()
+    lr = fit_logistic_regression(x_tr, y_tr, ds.cat_cols, params["models"]["logistic_regression"])
+    raw_val = predict(lr, x_va)
+    method, table = select_calibration(raw_val, y_va, params["calibration"])
+    calibrator = Calibrator.fit(method, raw_val, y_va)
+    val = prob_metrics(y_va, calibrator.transform(raw_val))
+    linear = LinearChurnModel.from_sklearn(
+        lr, x_tr, metrics={f"val_{k}": round(v, 4) for k, v in val.items()}
+    )
+    max_diff = float(np.abs(linear.predict_proba(x_va) - raw_val).max())
+    if max_diff > 1e-9:
+        raise SystemExit(f"JSON export does not reproduce scikit-learn (max diff {max_diff})")
+    path = REPO_ROOT / params["output"]["challenger_path"]
+    linear.save(path)
+    calibrator.save(calibration_path_for(path))
+    return {
+        "model": "logistic_regression",
+        "artifact": params["output"]["challenger_path"],
+        "export_max_abs_diff_vs_sklearn": max_diff,
+        "calibration": {"selected": method, "cross_fitted_on_validation": table},
+        "validation_calibrated_in_sample": val,
+    }
 
 
 def main() -> None:
@@ -94,11 +128,12 @@ def main() -> None:
         },
         "validation_raw": prob_metrics(y_val, raw_val),
         "validation_calibrated_in_sample": prob_metrics(y_val, calibrator.transform(raw_val)),
+        "challenger": train_challenger(ds, split, params),
     }
     meta_path = REPO_ROOT / out["training_metadata_path"]
     meta_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-    print(json.dumps({k: metadata[k] for k in ("best_iteration", "tree_count", "split", "calibration")}, indent=2))
+    print(json.dumps({k: metadata[k] for k in ("best_iteration", "tree_count", "split", "calibration", "challenger")}, indent=2))
     print(f"Wrote {model_path.relative_to(REPO_ROOT)}, {out['calibration_path']}, {out['training_metadata_path']}")
 
 
