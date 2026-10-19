@@ -21,3 +21,5 @@ mlflow.db
 mlartifacts
 mlruns
 .coverage
+# Local environment files (configuration comes from the platform's env vars)
+**/.env

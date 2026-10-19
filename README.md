@@ -225,42 +225,31 @@ is still a function of tenure, charges and contract, which are strongly predicti
 rank churners above or below chance (here a Platt fit on the permuted labels flipped its sign). It is
 far below the healthy model either way, which is what the gate and canary need.
 
-Running the original demo exposed two real defects in the canary code, fixed earlier and covered by
-regression tests:
-
-1. **Inflated disagreement rate.** Disagreements were counted on every request but divided by the
-   number of requests served by the shadow (only `CANARY_TRAFFIC_PERCENT` of traffic), so the rate
-   could exceed 100%. The rate is now measured over all compared requests.
-2. **Rollback hit the wrong model.** Automatic rollback called the manual `rollback()`, which demotes
-   the *active* model. It now calls `abort_canary()`, which rejects the shadow candidate and leaves the
-   active model alone.
+Running the original demo exposed two canary bugs (an inflated disagreement rate and a rollback
+that demoted the healthy model); both are in the [engineering log](docs/engineering_log.md).
 
 The demo output is not fully deterministic: which requests are served by the canary depends on random
 prediction ids. The disagreement counts and pass/fail outcome depend only on the two models and the
 replayed rows.
 
-## Bugs found during the evaluation/safety pass
+## Selected bugs
 
-Each is fixed and has a regression test.
+Every bug found while hardening the project is fixed, has a regression test where code changed, and
+is written up in [docs/engineering_log.md](docs/engineering_log.md) (26 entries). Four that say the
+most about the project:
 
-1. **Test-split leakage in the old training run.** The shipped model was early-stopped on the 20% split
-   it was evaluated on. Now early stopping uses the validation split (`train.py`).
-2. **Promotion was not gated.** `ModelValidationGate` existed but `POST /models/promote` never called it.
-   Now it does (`test_promotion_gate.py`).
-3. **Validation errors from custom validators returned 500.** The 422 handler put the raw `ValueError`
-   from pydantic's error context into the JSON response, which cannot be serialised. Fixed with
-   `jsonable_encoder` (`test_override_requires_a_reason`).
-4. **Password changes did not take effect.** `AuthService` cached each user record, including the
-   password hash, for `CACHE_TTL_SECONDS` (and in Redis when enabled), so a replaced password kept
-   working. The cache was removed (`test_changed_password_takes_effect_immediately`).
-5. **Production checks could never fire on Render.** `render.yaml` did not set `ENVIRONMENT`, so a deployed
-   API ran as `development`. The Blueprint now sets `ENVIRONMENT=production`.
-6. **Registry and runtime diverged after a restart.** The registry persists (SQLite file or Postgres)
-   but the runtime always started from the default artifact, so after a promotion and a restart the API
-   reported v2 as active while serving v1. Startup now loads the registry's active and shadow artifacts;
-   an unloadable active artifact aborts startup (`test_restart_serves_the_registry_active_model`).
-7. Minor: the threshold analysis valued a saved customer with the mean monthly charge of churners over
-   the whole dataset, test labels included. It now uses train+validation only.
+- **The original model was evaluated on its own early-stopping data.** Its tree count was chosen on
+  the same 20% split its test metrics came from. The rebuilt pipeline early-stops, calibrates and picks
+  the threshold on a separate validation split and touches the test split once.
+- **After a promotion and a restart, the API served a different model than the registry reported.**
+  The registry persists; the runtime always booted the default artifact. Startup now loads what the
+  registry says and refuses to start if the active model cannot be loaded.
+- **The Postgres mode had never run, and could not have.** Six defects stood between the code and a
+  working deployment, the worst being that `audit_logs` only had a March 2026 partition, so every
+  prediction (each writes an audit event) failed from April on. The suite now runs on Postgres in CI.
+- **The drift detector looked tested but never executed.** A dependency upgrade broke its import, a flag
+  silently disabled it, and its tests turned the `ImportError` into a skip; its result parsing was also
+  wrong. It is now ported, and its tests fail instead of skipping.
 
 ## MLOps: pipeline, validation, CI, drift, observability, Postgres
 
@@ -393,8 +382,8 @@ Screenshots from this machine (Docker Desktop, canary at 20% for the demo):
 (150 tests each, also in CI), the rollback demo passes against the API container on Postgres
 ([transcript](docs/demo_shadow_rollback_postgres.md)), and predictions, audit events, the registry and
 batch jobs are persisted (checked in the tables; after a container restart the API still serves the
-promoted v2). Getting there meant fixing six defects in a path that had never been run (see the bug
-list). Run it with `DATABASE_BACKEND=postgres docker compose --profile postgres up --build`.
+promoted v2). Getting there meant fixing six defects in a path that had never been run (see the
+[engineering log](docs/engineering_log.md)). Run it with `DATABASE_BACKEND=postgres docker compose --profile postgres up --build`.
 
 ### Developer experience
 
@@ -416,70 +405,6 @@ pulls hung on this machine at the time. The same compose file built and ran from
 (API, Prometheus, Grafana, Postgres), but the **frontend container was never built** in this pass.
 The frontend image now gets `VITE_API_URL` as a build argument (default `http://localhost:8000`)
 instead of relying on the committed `frontend/.env`, which the security notes say to untrack.
-
-## Bugs found during the MLOps pass
-
-Each is fixed and covered by a regression test (named in brackets) unless noted.
-
-Drift and monitoring
-
-1. **The Evidently drift module never ran.** `requirements.txt` pins Evidently 0.7.21, which moved the
-   API the code imported (`evidently.report`) under `evidently.legacy`; the import failed, a flag
-   silently disabled the module, and its 7 tests wrapped `ImportError` in `pytest.skip`, so they were
-   always skipped. (The README blamed a missing install.) Ported to the 0.7 legacy API; the tests now
-   run and skip only explicitly. [`test_drift_detection.py`]
-2. **Even with Evidently, no drifted feature would have been reported.** The parser looked for a dict
-   key and a list that do not exist in Evidently's output, and the summary counted every column as
-   drifted (`drift_share` always 1.0). One skipped test also asserted an alert for perfect predictions
-   (AUC 1.0); it now uses degraded scores. [`test_detect_drift_present`, `test_performance_drift_detection`]
-3. **The live monitor's `TotalServices` signal was always 0.** It is an engineered feature, not part of
-   the stored request, so it was never found. [`test_total_services_signal_reflects_the_requests`]
-4. **The live monitor froze after 5,000 predictions in SQLite mode** (it read the oldest page of the
-   history) **and swapped its windows on Postgres** (newest-first ordering, so drift deltas had the
-   wrong sign). Both repositories now provide `recent()`. [`test_monitor_watches_the_latest_window_not_the_first`]
-5. **A "scheduled" retrain fired 30 minutes after every restart**, drift or not: the last-retrain
-   timestamp started at 0, so the 24-hour interval had always elapsed. [`test_no_retrain_shortly_after_startup_without_drift`]
-
-Postgres (`DATABASE_BACKEND=postgres` had never been run)
-
-6. **The API could not start unless launched from `backend/`**: Alembic's `script_location` was
-   relative to the working directory. (Startup on Postgres in every test.)
-7. **Running the migrations silenced the application's loggers** (`fileConfig` defaults to
-   `disable_existing_loggers=True`, and migrations run inside API startup).
-8. **Every repository read failed with `DetachedInstanceError`**: sessions expired objects on commit
-   and the repositories read them afterwards. (`expire_on_commit=False`; whole suite on Postgres.)
-9. **Every prediction failed after March 2026**: `audit_logs` and `feedback_events` are partitioned by
-   month but only March 2026 partitions were ever created, and every prediction writes an audit event.
-   Migration `0003` adds DEFAULT partitions.
-10. **Monitoring snapshots, feedback and outcomes failed with a NOT NULL violation**: `event_at` had no
-    default although the ORM declared one. Migration `0003` adds it. [`test_feedback_and_outcome_round_trip`]
-11. **Automatic canary rollback silently failed**: the `stage` CHECK constraint did not allow
-    `rejected`, the prediction path swallowed the exception, and the bad candidate stayed in shadow.
-    Migration `0004`; the failure is now logged. [`test_abort_canary_through_the_app_on_the_configured_backend`]
-
-Packaging and runtime
-
-12. **A locally built image refused to start**: `.dockerignore` did not exclude `backend/data/*.db`, so
-    the local registry (and local predictions) were baked into the image, and the registry stored the
-    seed model as an absolute Windows path, which does not exist in a Linux container. The seed is now
-    repo-relative, old absolute paths are mapped onto the checkout, and local state is excluded.
-    [`test_app_starts_with_a_registry_seeded_on_another_machine`]
-13. **`model_validation_service` was imported under two module names** (`backend.services...` in the
-    registry, gate and some tests, `services...` elsewhere), so it existed twice in memory and a patch
-    or `isinstance` check on one copy would miss the other. Found by mypy, which also flagged ORM
-    timestamp columns typed as `str`.
-14. **The retraining job wrote into the repository** (`catboost_info/` in the working directory, models
-    and bundles under `model/artifacts/`). `RETRAINING_OUTPUT_DIR` redirects them; CatBoost no longer
-    writes training logs.
-
-Test and tooling hygiene
-
-15. The rate limiter's in-memory counters leaked between tests (a 500-request test made later tests
-    fail with 429); `conftest.py` now resets them.
-16. The venv had pandas 3.0.2 while the lock pins 2.2.3. Aligned to the lock and re-ran the pipeline:
-    every generated report was byte-identical under both versions.
-17. My own `tasks.py loadtest` left uvicorn's worker processes running on Windows (`terminate()`
-    stops only the parent); it now stops the whole process tree.
 
 ## Architecture
 
@@ -648,10 +573,9 @@ settings, `CANARY_ENABLED`, `CANARY_TRAFFIC_PERCENT`, `CANARY_MIN_SAMPLES`,
   Anyone can sign in as analyst or viewer on the live demo; analysts can run batch jobs and submit
   feedback. Do not describe this as production-grade authentication.
 - Passwords are hashed with PBKDF2-SHA256; tokens are signed JWTs.
-- `backend/.env` and `frontend/.env` are tracked in git. They contain only local development values,
-  but the frontend one (`VITE_API_URL=http://127.0.0.1:8000`) is picked up by a Vercel build that does
-  not set the variable. Untrack both (`git rm --cached backend/.env frontend/.env`) and copy from the
-  `.env.example` files instead.
+- `backend/.env` and `frontend/.env` are no longer tracked (they held only local development values,
+  but a Vercel build without `VITE_API_URL` picked up the frontend one's `http://127.0.0.1:8000`). Copy
+  the `.env.example` files instead; both names are git-ignored. They remain in the git history.
 
 ## Limitations
 
