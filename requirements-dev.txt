@@ -1,6 +1,6 @@
 # CI / developer tooling on top of requirements.txt (the full pinned environment).
 # Kept separate so the UTF-16 lock file does not churn.
-ruff==0.15.21
+ruff==0.17.1
 mypy==2.4.0
 pytest-cov==7.1.0
 coverage==7.16.2
