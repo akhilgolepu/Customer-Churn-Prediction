@@ -96,3 +96,64 @@ def test_retraining_orchestrator_dry_run():
     assert result["reason"] == "unit_test"
     assert result["auto_promote"] is True
     assert "dataset_path" in result
+
+
+class _RecordingJobs:
+    def __init__(self):
+        self.jobs = []
+
+    async def enqueue_simple_job(self, job_type, payload=None, idempotency_key=None):
+        self.jobs.append((job_type, payload))
+
+
+class _Snapshot:
+    def __init__(self, alerts):
+        self.alerts = alerts
+
+    def snapshot(self):
+        return {"alerts": self.alerts}
+
+
+def _scheduler_settings(monkeypatch):
+    import services.job_service as job_service_module
+
+    settings = SimpleNamespace(
+        schedule_retraining_enabled=True,
+        schedule_retrain_cooldown_seconds=21600,
+        schedule_retrain_force_interval_seconds=86400,
+    )
+    monkeypatch.setattr(job_service_module, "get_settings", lambda: settings)
+
+
+@pytest.mark.asyncio
+async def test_no_retrain_shortly_after_startup_without_drift(monkeypatch):
+    """Regression: the last-enqueue timestamp started at 0.0, so the 24 h
+    scheduled retrain fired on the first poll after every restart."""
+    import time
+
+    _scheduler_settings(monkeypatch)
+    jobs = _RecordingJobs()
+    scheduler = SchedulerService(jobs, monitoring_service=_Snapshot([]))
+    assert await scheduler.check_retraining_trigger(now=time.time() + 1800) is None
+    assert jobs.jobs == []
+
+
+@pytest.mark.asyncio
+async def test_forced_interval_and_drift_trigger_respect_cooldown(monkeypatch):
+    import time
+
+    _scheduler_settings(monkeypatch)
+    jobs = _RecordingJobs()
+    monitoring = _Snapshot([])
+    scheduler = SchedulerService(jobs, monitoring_service=monitoring)
+    start = time.time()
+
+    forced = await scheduler.check_retraining_trigger(now=start + 86401)
+    assert forced["reason"] == "scheduled_interval"
+
+    monitoring.alerts = ["Input drift alert on tenure: delta=0.900"]
+    assert await scheduler.check_retraining_trigger(now=start + 86401 + 60) is None  # cooldown
+    drift = await scheduler.check_retraining_trigger(now=start + 86401 + 21601)
+    assert drift["reason"] == "drift_alert" and drift["alerts"] == monitoring.alerts
+    assert [j[0] for j in jobs.jobs] == ["retraining", "retraining"]
+

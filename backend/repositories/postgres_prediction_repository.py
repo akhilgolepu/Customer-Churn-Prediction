@@ -62,6 +62,11 @@ class PostgresPredictionRepository:
                 )
             )
 
+    def recent(self, limit: int) -> list[PredictionHistoryItem]:
+        """The latest `limit` predictions, oldest first (monitoring window)."""
+        items, _ = self.list_paginated(page=1, page_size=limit)  # newest first
+        return list(reversed(items))
+
     def list_paginated(
         self,
         page: int,

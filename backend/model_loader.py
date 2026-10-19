@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import json
 from pathlib import Path
 import shutil
@@ -9,10 +10,53 @@ from core.settings import get_settings
 from catboost import CatBoostClassifier
 import shap
 
+from model.calibration import Calibrator, load_for_model
+from model.linear_model import LinearChurnModel
+
 from storage.factory import build_object_storage
 
 _BASE_DIR = Path(__file__).parent.parent
+logger = logging.getLogger(__name__)
 MODEL_PATH = Path(get_settings().model_path)
+
+
+class _CatBoostAdapter:
+    """Uniform interface: predict_proba(frame) -> 1-D P(churn); explain(frame) -> per-feature values."""
+
+    kind = "catboost"
+
+    def __init__(self, model: CatBoostClassifier) -> None:
+        self._model = model
+        self._explainer = None
+
+    def prepare_explainer(self) -> None:
+        if self._explainer is None:
+            self._explainer = shap.TreeExplainer(self._model)
+
+    def predict_proba(self, features):
+        return self._model.predict_proba(features)[:, 1]
+
+    def explain(self, df):
+        # SHAP values are in the raw model's log-odds space.
+        self.prepare_explainer()
+        return self._explainer.shap_values(df)[0]
+
+
+class _LinearAdapter:
+    kind = "logistic_regression"
+
+    def __init__(self, model: LinearChurnModel) -> None:
+        self._model = model
+
+    def prepare_explainer(self) -> None:
+        pass
+
+    def predict_proba(self, features):
+        return self._model.predict_proba(features)
+
+    def explain(self, df):
+        # Exact log-odds contributions vs the average training customer.
+        return self._model.explain(df)
 
 
 class ModelRuntimeManager:
@@ -20,12 +64,13 @@ class ModelRuntimeManager:
         self._lock = Lock()
         self._object_storage = build_object_storage()
         self._default_model_path = default_model_path
-        self._active_model = self._load_model(default_model_path)
-        self._active_explainer = shap.TreeExplainer(self._active_model)
+        self._active_model, self._active_calibrator = self._load_model(default_model_path)
+        self._active_model.prepare_explainer()
         self._active_model_path = str(default_model_path)
         self._active_bundle_dir: Path | None = None
-        self._shadow_model = None
-        self._shadow_model_path = None
+        self._shadow_model: _CatBoostAdapter | _LinearAdapter | None = None
+        self._shadow_calibrator: Calibrator | None = None
+        self._shadow_model_path: str | None = None
         self._shadow_bundle_dir: Path | None = None
 
     def _sha256_file(self, path: Path) -> str:
@@ -39,16 +84,30 @@ class ModelRuntimeManager:
         if artifact_path.startswith("s3://") or artifact_path.startswith("az://"):
             if self._object_storage is None:
                 raise RuntimeError("Object storage provider is not configured")
-            suffix = ".zip" if artifact_path.endswith(".zip") else ".cbm"
+            suffix = next((s for s in (".zip", ".json") if artifact_path.endswith(s)), ".cbm")
             return self._object_storage.download_to_path(artifact_path, suffix=suffix)
 
         if artifact_path.startswith("file://"):
             return Path(artifact_path.replace("file://", "", 1))
 
         model_path = Path(artifact_path)
-        if model_path.is_absolute():
-            return model_path
-        return (_BASE_DIR / model_path).resolve()
+        resolved = model_path if model_path.is_absolute() else (_BASE_DIR / model_path).resolve()
+        # (On Linux a Windows path such as "G:\..." is not absolute and lands here too.)
+        return resolved if resolved.exists() else self._relocate(artifact_path, resolved)
+
+    def _relocate(self, artifact_path: str, model_path: Path) -> Path:
+        """An absolute path recorded on another machine (e.g. a registry seeded on Windows
+        and mounted into a Linux container): map ".../model/artifacts/<rest>" onto this
+        checkout when that file exists. Otherwise return the path unchanged (and let
+        the caller report it missing)."""
+        normalized = artifact_path.replace("\\", "/")
+        marker = "/model/artifacts/"
+        if marker in normalized:
+            candidate = (_BASE_DIR / "model" / "artifacts" / normalized.split(marker, 1)[1]).resolve()
+            if candidate.exists():
+                logger.warning("Artifact %s not found; using %s from this checkout", artifact_path, candidate)
+                return candidate
+        return model_path
 
     def _cleanup_bundle_dir(self, bundle_dir: Path | None) -> None:
         if bundle_dir and bundle_dir.exists():
@@ -100,16 +159,38 @@ class ModelRuntimeManager:
         return model_path, bundle_dir
 
     def _resolve_model_artifact(self, artifact_path: str) -> tuple[Path, Path | None]:
+        if artifact_path.startswith(("models:/", "runs:/")):
+            # MLflow registry/run URI (model/tracking.py). Needs mlflow installed,
+            # which the slim API image is not; use a file/s3 path there.
+            from model.tracking import download_model_dir
+
+            return download_model_dir(artifact_path)
         resolved_path = self._resolve_artifact(artifact_path)
         if resolved_path.suffix.lower() == ".zip":
             model_path, bundle_dir = self._resolve_model_from_bundle(resolved_path)
             return model_path, bundle_dir
         return resolved_path, None
 
-    def _load_model(self, model_path: Path) -> CatBoostClassifier:
-        model = CatBoostClassifier()
-        model.load_model(str(model_path))
-        return model
+    def _load_model(self, model_path: Path):
+        """Load a model artifact and its calibration.
+
+        .cbm -> CatBoost; .json -> logistic regression (model/linear_model.py).
+        A bundle keeps the calibration at model/calibration.json, a loose artifact
+        next to it as <name>.calibration.json. Without one the raw score is served
+        (identity), which is how pre-calibration artifacts behave."""
+        model: _CatBoostAdapter | _LinearAdapter
+        if LinearChurnModel.is_linear_artifact(model_path):
+            model = _LinearAdapter(LinearChurnModel.load(model_path))
+        else:
+            cb = CatBoostClassifier()
+            cb.load_model(str(model_path))
+            model = _CatBoostAdapter(cb)
+        bundled = model_path.parent / "calibration.json"
+        if model_path.name == "model.cbm" and bundled.exists():
+            calibrator = Calibrator.load(bundled)
+        else:
+            calibrator = load_for_model(model_path)
+        return model, calibrator
 
     def set_active_model(self, artifact_path: str) -> None:
         model_path, bundle_dir = self._resolve_model_artifact(artifact_path)
@@ -117,9 +198,10 @@ class ModelRuntimeManager:
             raise RuntimeError(f"Model artifact not found: {model_path}")
 
         with self._lock:
-            active = self._load_model(model_path)
+            active, calibrator = self._load_model(model_path)
+            active.prepare_explainer()
             self._active_model = active
-            self._active_explainer = shap.TreeExplainer(active)
+            self._active_calibrator = calibrator
             old_bundle = self._active_bundle_dir
             self._active_bundle_dir = bundle_dir
             self._active_model_path = artifact_path
@@ -130,6 +212,7 @@ class ModelRuntimeManager:
             with self._lock:
                 old_bundle = self._shadow_bundle_dir
                 self._shadow_model = None
+                self._shadow_calibrator = None
                 self._shadow_model_path = None
                 self._shadow_bundle_dir = None
                 self._cleanup_bundle_dir(old_bundle)
@@ -140,7 +223,7 @@ class ModelRuntimeManager:
             raise RuntimeError(f"Shadow artifact not found: {model_path}")
 
         with self._lock:
-            self._shadow_model = self._load_model(model_path)
+            self._shadow_model, self._shadow_calibrator = self._load_model(model_path)
             old_bundle = self._shadow_bundle_dir
             self._shadow_bundle_dir = bundle_dir
             self._shadow_model_path = artifact_path
@@ -149,25 +232,51 @@ class ModelRuntimeManager:
     def predict_active(self, features) -> float:
         with self._lock:
             proba = self._active_model.predict_proba(features)
-        return float(proba[0][1])
+            calibrator = self._active_calibrator
+        return float(calibrator.transform(proba[0]))
 
     def predict_shadow(self, features) -> float | None:
         with self._lock:
             if self._shadow_model is None:
                 return None
             proba = self._shadow_model.predict_proba(features)
-        return float(proba[0][1])
+            calibrator = self._shadow_calibrator
+        if calibrator is None:  # set together with the shadow model; explicit check, not assert (python -O)
+            raise RuntimeError("shadow model loaded without a calibrator")
+        return float(calibrator.transform(proba[0]))
 
     def explain_active(self, df):
+        # Explanations are in the raw model's log-odds space. Calibration is a
+        # monotone map applied afterwards, so the ranking of drivers is unchanged.
         with self._lock:
-            shap_values = self._active_explainer.shap_values(df)[0]
-        return shap_values
+            return self._active_model.explain(df)
+
+    def load_scorer(self, artifact_path: str):
+        """Load an artifact outside the runtime (does not touch active/shadow) and
+        return predict_fn(frame) -> calibrated P(churn) per row. Used by the
+        promotion gate."""
+        model_path, bundle_dir = self._resolve_model_artifact(artifact_path)
+        try:
+            if not model_path.exists():
+                raise RuntimeError(f"Model artifact not found: {model_path}")
+            model, calibrator = self._load_model(model_path)
+        finally:
+            self._cleanup_bundle_dir(bundle_dir)
+
+        def predict_fn(features):
+            return calibrator.transform(model.predict_proba(features))
+
+        return predict_fn
 
     def state(self) -> dict[str, str | None]:
         with self._lock:
             return {
                 "active_model_path": self._active_model_path,
+                "active_model_kind": self._active_model.kind,
+                "active_calibration": self._active_calibrator.method,
                 "shadow_model_path": self._shadow_model_path,
+                "shadow_model_kind": self._shadow_model.kind if self._shadow_model else None,
+                "shadow_calibration": self._shadow_calibrator.method if self._shadow_calibrator else None,
             }
 
 
@@ -187,6 +296,10 @@ def predict_shadow_proba(features):
 
 def explain(df):
     return runtime_manager.explain_active(df)
+
+
+def load_scorer(artifact_path: str):
+    return runtime_manager.load_scorer(artifact_path)
 
 
 def switch_active_model(artifact_path: str) -> None:

@@ -1,3 +1,4 @@
+import logging
 import asyncio
 import math
 import time
@@ -12,8 +13,11 @@ from feature_engineering import engineer_features
 from model_loader import explain as explain_model
 from model_loader import predict_proba
 from model_loader import predict_shadow_proba
+from core import prometheus
 from repositories.prediction_repository import PredictionHistoryItem, PredictionRepository
 from schemas.prediction import PredictionRequest
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -68,7 +72,9 @@ class PredictionService:
             raise last_exc
         raise RuntimeError("Unknown dependency failure")
 
-    async def predict(self, request: PredictionRequest, threshold: float) -> dict:
+    async def predict(self, request: PredictionRequest, threshold: float | None = None) -> dict:
+        if threshold is None:
+            threshold = get_settings().decision_threshold
         df = engineer_features(request)
         active_probability = float(await self._run_with_resilience(lambda: predict_proba(df)))
         shadow_probability = await self._run_with_resilience(lambda: predict_shadow_proba(df))
@@ -86,20 +92,28 @@ class PredictionService:
             variant = str(canary_eval.get("variant", "active"))
             rollback_triggered = bool(canary_eval.get("rollback_triggered", False))
 
+        if rollback_triggered:
+            # Never serve the candidate that just failed the canary.
+            variant = "active"
+
         probability = active_probability
         if variant == "shadow" and shadow_probability is not None:
             probability = float(shadow_probability)
 
         if rollback_triggered and self._model_registry_service is not None:
             try:
-                self._model_registry_service.rollback()
+                reason = (self._canary_service.snapshot().get("last_rollback_reason") if self._canary_service else None) or "canary disagreement"
+                self._model_registry_service.abort_canary(reason)
+            except Exception:
+                # A failed rollback must not fail the prediction, but it must be
+                # visible: on Postgres it used to fail silently (stage constraint).
+                logger.exception("Automatic canary rollback failed")
+            finally:
                 if self._canary_service is not None:
                     self._canary_service.disable()
-            except Exception:   # nosec B110
-                # Rollback attempts should not fail prediction path.
-                pass
 
         is_churn = probability >= threshold
+        prometheus.observe_prediction(variant, probability, is_churn, rollback_triggered)
 
         self._repo.add(
             PredictionHistoryItem(

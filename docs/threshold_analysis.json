@@ -1,0 +1,303 @@
+{
+  "calibration_method": "identity",
+  "selection_data": "validation split, calibrated out-of-fold",
+  "split": {
+    "validation_rows": 1409,
+    "test_rows": 1409
+  },
+  "horizon_months": 12,
+  "mean_monthly_charge_of_churners_train_val": 74.86,
+  "primary_scenario": "margin_with_incentive",
+  "scenarios": {
+    "margin_with_incentive": {
+      "offer_cost": 50.0,
+      "save_rate": 0.3,
+      "margin": 0.5,
+      "value_per_retained_customer": 449.16,
+      "empirical_threshold_validation": 0.38,
+      "closed_form_threshold": 0.3711,
+      "validation_net_benefit_per_1000": {
+        "at_empirical": 9553.454049576187,
+        "at_closed_form": 9368.211469032096,
+        "at_old_default_0.62": 5341.772898068082
+      },
+      "test": {
+        "contact_nobody": {
+          "net_benefit_per_1000": 0.0
+        },
+        "contact_everyone": {
+          "threshold": 0.0,
+          "flagged_pct": 1.0,
+          "precision": 0.2654364797728886,
+          "recall": 1.0,
+          "net_benefit_per_1000": -14232.885326294649
+        },
+        "threshold_0.50": {
+          "threshold": 0.5,
+          "flagged_pct": 0.2044002838892832,
+          "precision": 0.6666666666666666,
+          "recall": 0.5133689839572193,
+          "net_benefit_per_1000": 8141.713124657304
+        },
+        "old_default_0.62": {
+          "threshold": 0.62,
+          "flagged_pct": 0.11426543647977289,
+          "precision": 0.7515527950310559,
+          "recall": 0.3235294117647059,
+          "net_benefit_per_1000": 5858.441746916029
+        },
+        "empirical_from_validation": {
+          "threshold": 0.38,
+          "flagged_pct": 0.3144073811213627,
+          "precision": 0.5801354401805869,
+          "recall": 0.6871657754010695,
+          "net_benefit_per_1000": 8857.568032547575
+        },
+        "closed_form": {
+          "threshold": 0.3711,
+          "flagged_pct": 0.32008516678495386,
+          "precision": 0.5809312638580931,
+          "recall": 0.7005347593582888,
+          "net_benefit_per_1000": 9051.848731636806
+        }
+      }
+    },
+    "revenue_cheap": {
+      "offer_cost": 20.0,
+      "save_rate": 0.3,
+      "margin": 1.0,
+      "value_per_retained_customer": 898.32,
+      "empirical_threshold_validation": 0.06,
+      "closed_form_threshold": 0.0742,
+      "validation_net_benefit_per_1000": {
+        "at_empirical": 55455.47418767551,
+        "at_closed_form": 55137.88511029194,
+        "at_old_default_0.62": 19427.335718066613
+      },
+      "test": {
+        "contact_nobody": {
+          "net_benefit_per_1000": 0.0
+        },
+        "contact_everyone": {
+          "threshold": 0.0,
+          "flagged_pct": 1.0,
+          "precision": 0.2654364797728886,
+          "recall": 1.0,
+          "net_benefit_per_1000": 51534.2293474107
+        },
+        "threshold_0.50": {
+          "threshold": 0.5,
+          "flagged_pct": 0.2044002838892832,
+          "precision": 0.6666666666666666,
+          "recall": 0.5133689839572193,
+          "net_benefit_per_1000": 32635.44896045726
+        },
+        "old_default_0.62": {
+          "threshold": 0.62,
+          "flagged_pct": 0.11426543647977289,
+          "precision": 0.7515527950310559,
+          "recall": 0.3235294117647059,
+          "net_benefit_per_1000": 20858.118412213887
+        },
+        "empirical_from_validation": {
+          "threshold": 0.06,
+          "flagged_pct": 0.7019162526614621,
+          "precision": 0.36804853387259856,
+          "recall": 0.9732620320855615,
+          "net_benefit_per_1000": 55583.22436510631
+        },
+        "closed_form": {
+          "threshold": 0.0742,
+          "flagged_pct": 0.6699787083037615,
+          "precision": 0.3855932203389831,
+          "recall": 0.9732620320855615,
+          "net_benefit_per_1000": 56221.97525226032
+        }
+      }
+    }
+  },
+  "primary_bootstrap_95ci_per_1000": {
+    "empirical_minus_0.50_test": [
+      -420.9732239710798,
+      1888.3198354581518
+    ],
+    "empirical_minus_old_default_0.62_test": [
+      1431.2885683529914,
+      4682.114672874572
+    ],
+    "closed_form_minus_empirical_test": [
+      -70.97232079489,
+      505.84436410936905
+    ]
+  },
+  "primary_curve": [
+    {
+      "threshold": 0.1,
+      "validation_net_benefit_per_1000": 2137.6191278712363,
+      "test_net_benefit_per_1000": 2530.9795984248453
+    },
+    {
+      "threshold": 0.15,
+      "validation_net_benefit_per_1000": 4830.328271907071,
+      "test_net_benefit_per_1000": 4939.799459281118
+    },
+    {
+      "threshold": 0.2,
+      "validation_net_benefit_per_1000": 6207.036775055723,
+      "test_net_benefit_per_1000": 6526.412218632729
+    },
+    {
+      "threshold": 0.25,
+      "validation_net_benefit_per_1000": 7723.903553600719,
+      "test_net_benefit_per_1000": 7415.352594762293
+    },
+    {
+      "threshold": 0.3,
+      "validation_net_benefit_per_1000": 8100.974153257491,
+      "test_net_benefit_per_1000": 8298.26755852843
+    },
+    {
+      "threshold": 0.35,
+      "validation_net_benefit_per_1000": 8732.4732880598,
+      "test_net_benefit_per_1000": 8872.63156345614
+    },
+    {
+      "threshold": 0.4,
+      "validation_net_benefit_per_1000": 9391.64680470269,
+      "test_net_benefit_per_1000": 8742.071432810104
+    },
+    {
+      "threshold": 0.45,
+      "validation_net_benefit_per_1000": 8843.064527844175,
+      "test_net_benefit_per_1000": 8586.849626505196
+    },
+    {
+      "threshold": 0.5,
+      "validation_net_benefit_per_1000": 8212.685445452194,
+      "test_net_benefit_per_1000": 8141.713124657304
+    },
+    {
+      "threshold": 0.55,
+      "validation_net_benefit_per_1000": 7128.798056450293,
+      "test_net_benefit_per_1000": 7344.727725016677
+    },
+    {
+      "threshold": 0.6,
+      "validation_net_benefit_per_1000": 5708.685326769383,
+      "test_net_benefit_per_1000": 6452.108328922291
+    },
+    {
+      "threshold": 0.65,
+      "validation_net_benefit_per_1000": 4939.374308969336,
+      "test_net_benefit_per_1000": 5395.89532176097
+    },
+    {
+      "threshold": 0.7,
+      "validation_net_benefit_per_1000": 3812.1889810131242,
+      "test_net_benefit_per_1000": 4271.722699986471
+    },
+    {
+      "threshold": 0.75,
+      "validation_net_benefit_per_1000": 2638.693007920891,
+      "test_net_benefit_per_1000": 3147.550078211973
+    },
+    {
+      "threshold": 0.8,
+      "validation_net_benefit_per_1000": 1000.86424348016,
+      "test_net_benefit_per_1000": 1676.3276310198892
+    },
+    {
+      "threshold": 0.85,
+      "validation_net_benefit_per_1000": 445.69652805305606,
+      "test_net_benefit_per_1000": 962.3653769010022
+    },
+    {
+      "threshold": 0.9,
+      "validation_net_benefit_per_1000": 120.29567211262527,
+      "test_net_benefit_per_1000": 180.44350816893788
+    }
+  ],
+  "sensitivity_primary_value": [
+    {
+      "offer_cost": 25,
+      "save_rate": 0.1,
+      "empirical_threshold_validation": 0.52,
+      "closed_form_threshold": 0.5566,
+      "test_net_benefit_per_1000_empirical": 1057.1770486433377,
+      "test_net_benefit_per_1000_closed_form": 1040.9226069391473,
+      "test_net_benefit_per_1000_contact_everyone": -13077.628442098216
+    },
+    {
+      "offer_cost": 25,
+      "save_rate": 0.3,
+      "empirical_threshold_validation": 0.24,
+      "closed_form_threshold": 0.1855,
+      "test_net_benefit_per_1000_empirical": 18312.616542959622,
+      "test_net_benefit_per_1000_closed_form": 18611.569357047745,
+      "test_net_benefit_per_1000_contact_everyone": 10767.11467370535
+    },
+    {
+      "offer_cost": 25,
+      "save_rate": 0.5,
+      "empirical_threshold_validation": 0.06,
+      "closed_form_threshold": 0.1113,
+      "test_net_benefit_per_1000_empirical": 40470.0515320764,
+      "test_net_benefit_per_1000_closed_form": 40793.595163438105,
+      "test_net_benefit_per_1000_contact_everyone": 34611.85778950892
+    },
+    {
+      "offer_cost": 50,
+      "save_rate": 0.1,
+      "empirical_threshold_validation": 0.94,
+      "closed_form_threshold": 1.1132,
+      "test_net_benefit_per_1000_empirical": -0.0,
+      "test_net_benefit_per_1000_closed_form": -0.0,
+      "test_net_benefit_per_1000_contact_everyone": -38077.62844209822
+    },
+    {
+      "offer_cost": 50,
+      "save_rate": 0.3,
+      "empirical_threshold_validation": 0.38,
+      "closed_form_threshold": 0.3711,
+      "test_net_benefit_per_1000_empirical": 8857.568032547575,
+      "test_net_benefit_per_1000_closed_form": 9051.848731636806,
+      "test_net_benefit_per_1000_contact_everyone": -14232.885326294649
+    },
+    {
+      "offer_cost": 50,
+      "save_rate": 0.5,
+      "empirical_threshold_validation": 0.25,
+      "closed_form_threshold": 0.2226,
+      "test_net_benefit_per_1000_empirical": 26860.931873693007,
+      "test_net_benefit_per_1000_closed_form": 26947.563180794274,
+      "test_net_benefit_per_1000_contact_everyone": 9611.857789508918
+    },
+    {
+      "offer_cost": 100,
+      "save_rate": 0.1,
+      "empirical_threshold_validation": 0.94,
+      "closed_form_threshold": 2.2264,
+      "test_net_benefit_per_1000_empirical": -0.0,
+      "test_net_benefit_per_1000_closed_form": -0.0,
+      "test_net_benefit_per_1000_contact_everyone": -88077.62844209821
+    },
+    {
+      "offer_cost": 100,
+      "save_rate": 0.3,
+      "empirical_threshold_validation": 0.72,
+      "closed_form_threshold": 0.7421,
+      "test_net_benefit_per_1000_empirical": 738.7302173557001,
+      "test_net_benefit_per_1000_closed_form": 655.7070718339586,
+      "test_net_benefit_per_1000_contact_everyone": -64232.88532629465
+    },
+    {
+      "offer_cost": 100,
+      "save_rate": 0.5,
+      "empirical_threshold_validation": 0.38,
+      "closed_form_threshold": 0.4453,
+      "test_net_benefit_per_1000_empirical": 9522.490368889914,
+      "test_net_benefit_per_1000_closed_form": 10205.659247408563,
+      "test_net_benefit_per_1000_contact_everyone": -40388.14221049108
+    }
+  ]
+}

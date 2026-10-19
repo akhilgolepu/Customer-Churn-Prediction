@@ -434,6 +434,7 @@ def create_router_from_config(config: Dict[str, Any]) -> AlertRouter:
         channel_type = channel_config.get("type")
 
         try:
+            channel: AlertChannel
             if channel_type == "slack":
                 channel = SlackAlertChannel(
                     webhook_url=channel_config["webhook_url"],

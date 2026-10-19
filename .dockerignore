@@ -11,3 +11,15 @@
 client/dist
 model/training
 *.ipynb
+
+# Local runtime state must not be baked into images (registry DB, predictions,
+# reports, MLflow store, coverage).
+backend/data/*.db
+backend/data/validation_reports
+backend/data/objects
+mlflow.db
+mlartifacts
+mlruns
+.coverage
+# Local environment files (configuration comes from the platform's env vars)
+**/.env

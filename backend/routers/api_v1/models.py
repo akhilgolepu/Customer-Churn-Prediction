@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from core.dependencies import get_model_registry_service, require_roles
+from core.dependencies import get_canary_service, get_model_registry_service, require_roles
 from schemas.model_registry import (
     ModelMutationResponse,
     ModelRegistryResponse,
@@ -38,18 +38,28 @@ def register_model(
 def start_shadow(
     payload: ShadowTestRequest,
     model_registry_service=Depends(get_model_registry_service),
+    canary_service=Depends(get_canary_service),
     _=Depends(require_roles("admin")),
 ):
-    return model_registry_service.start_shadow_test(payload.candidate_model_id)
+    result = model_registry_service.start_shadow_test(payload.candidate_model_id)
+    # New candidate -> fresh canary counters (and re-enable if configured on).
+    canary_service.reset()
+    return result
 
 
 @router.post("/promote", response_model=ModelMutationResponse)
 def promote(
     payload: PromoteModelRequest,
     model_registry_service=Depends(get_model_registry_service),
-    _=Depends(require_roles("admin")),
+    user=Depends(require_roles("admin")),
 ):
-    return model_registry_service.promote_candidate(payload.candidate_model_id)
+    # 409 promotion_blocked when the validation gate has blockers (see promotion_gate.py).
+    return model_registry_service.promote_candidate(
+        payload.candidate_model_id,
+        override_gate=payload.override_gate,
+        override_reason=payload.override_reason,
+        actor=user.username,
+    )
 
 
 @router.post("/rollback", response_model=ModelMutationResponse)

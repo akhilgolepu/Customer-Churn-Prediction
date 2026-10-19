@@ -1,7 +1,10 @@
 import type { FormState } from "../types/formState";
 import { trackEvent } from "./analytics";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+// Local dev falls back to the local API. A production build never falls back to localhost:
+// if VITE_API_URL is missing there, requests go same-origin and fail visibly instead of
+// silently calling the visitor's own 127.0.0.1.
+const BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
 const SLOW_CALL_MS = 1200;
 let accessToken = "";
 
@@ -48,13 +51,18 @@ async function timedRequest<T>(path: string, errorPrefix: string, requestFn: () 
     }
 }
 
-export async function loginWithRole(role: "admin" | "analyst" | "viewer") {
-    const passwordByRole: Record<typeof role, string> = {
-        admin: "admin123",
-        analyst: "analyst123",
-        viewer: "viewer123",
-    };
+export type DemoRole = "analyst" | "viewer";
 
+// PUBLIC demo credentials: whatever is set here ends up in the shipped JavaScript.
+// Only the analyst and viewer accounts get one-click logins; admin needs a typed
+// password that is never part of the bundle. The fallbacks match the backend's
+// development-only defaults (backend/services/auth_service.py).
+const DEMO_PASSWORDS: Record<DemoRole, string> = {
+    analyst: import.meta.env.VITE_DEMO_ANALYST_PASSWORD ?? "analyst123",
+    viewer: import.meta.env.VITE_DEMO_VIEWER_PASSWORD ?? "viewer123",
+};
+
+export async function loginWithPassword(username: string, password: string) {
     const path = "/api/v1/auth/login";
     const tokens = await timedRequest<{ access_token: string; refresh_token: string; token_type: string }>(
         path,
@@ -62,11 +70,15 @@ export async function loginWithRole(role: "admin" | "analyst" | "viewer") {
         () => fetch(`${BASE_URL}${path}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: role, password: passwordByRole[role] }),
+            body: JSON.stringify({ username, password }),
         }),
     );
     setAccessToken(tokens.access_token);
     return tokens;
+}
+
+export async function loginWithRole(role: DemoRole) {
+    return loginWithPassword(role, DEMO_PASSWORDS[role]);
 }
 
 async function postJson<T>(path: string, formData: FormState, errorPrefix: string): Promise<T> {

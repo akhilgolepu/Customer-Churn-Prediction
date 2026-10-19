@@ -1,0 +1,5 @@
+{
+  "format": "churn_calibrator/v1",
+  "method": "identity",
+  "params": {}
+}

@@ -8,7 +8,7 @@ router = APIRouter(tags=["legacy"])
 @router.post("/predict", response_model=PredictionResponse)
 async def legacy_predict(
     payload: PredictionRequest,
-    threshold: float = Query(default=0.5, ge=0.0, le=1.0),
+    threshold: float | None = Query(default=None, ge=0.0, le=1.0),
 ):
     # Compatibility endpoint for existing frontend clients.
     from app_factory import app_state

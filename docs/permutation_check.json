@@ -1,0 +1,163 @@
+{
+  "summary": {
+    "n_permutations": 20,
+    "permuted_model_auc": {
+      "mean": 0.5286616807460798,
+      "sd": 0.12497087632896059,
+      "min": 0.24073987961455992,
+      "max": 0.735057738510424
+    },
+    "control_auc": {
+      "mean": 0.4987387300111085,
+      "sd": 0.020644792972633465,
+      "min": 0.45666382495026997,
+      "max": 0.5364850551551319
+    },
+    "null_sd_independent_scores": 0.017422599655011146,
+    "spearman_abs_auc_dev_vs_abs_rho": 0.9172932330827066,
+    "pearson_auc_vs_rho": 0.9765163871868905,
+    "shipped_model_test_auc": 0.8463574362551345
+  },
+  "runs": [
+    {
+      "seed": 0,
+      "trees": 115,
+      "auc_vs_true_labels": 0.5667906688367047,
+      "spearman_with_shipped_model": 0.17259682638924484,
+      "control_auc_scores_reassigned": 0.5018354904544162
+    },
+    {
+      "seed": 1,
+      "trees": 508,
+      "auc_vs_true_labels": 0.559965382727531,
+      "spearman_with_shipped_model": 0.16182354330017257,
+      "control_auc_scores_reassigned": 0.5217662559094784
+    },
+    {
+      "seed": 2,
+      "trees": 261,
+      "auc_vs_true_labels": 0.735057738510424,
+      "spearman_with_shipped_model": 0.6573098099781455,
+      "control_auc_scores_reassigned": 0.4768839288020874
+    },
+    {
+      "seed": 3,
+      "trees": 69,
+      "auc_vs_true_labels": 0.24073987961455992,
+      "spearman_with_shipped_model": -0.8036485276493752,
+      "control_auc_scores_reassigned": 0.47315223849750704
+    },
+    {
+      "seed": 4,
+      "trees": 262,
+      "auc_vs_true_labels": 0.6022888733886177,
+      "spearman_with_shipped_model": 0.21970312571606385,
+      "control_auc_scores_reassigned": 0.5224999354155364
+    },
+    {
+      "seed": 5,
+      "trees": 219,
+      "auc_vs_true_labels": 0.44034849776537754,
+      "spearman_with_shipped_model": -0.16537661966044326,
+      "control_auc_scores_reassigned": 0.5253274432302566
+    },
+    {
+      "seed": 6,
+      "trees": 143,
+      "auc_vs_true_labels": 0.4654783125371361,
+      "spearman_with_shipped_model": -0.13879601159935429,
+      "control_auc_scores_reassigned": 0.4772275181482343
+    },
+    {
+      "seed": 7,
+      "trees": 125,
+      "auc_vs_true_labels": 0.6204513162313674,
+      "spearman_with_shipped_model": 0.4018184538398004,
+      "control_auc_scores_reassigned": 0.5078560541476143
+    },
+    {
+      "seed": 8,
+      "trees": 115,
+      "auc_vs_true_labels": 0.43670593402051205,
+      "spearman_with_shipped_model": -0.038878789621555845,
+      "control_auc_scores_reassigned": 0.49187269110542775
+    },
+    {
+      "seed": 9,
+      "trees": 78,
+      "auc_vs_true_labels": 0.42317290552584674,
+      "spearman_with_shipped_model": -0.3197070176080356,
+      "control_auc_scores_reassigned": 0.492049652535586
+    },
+    {
+      "seed": 10,
+      "trees": 130,
+      "auc_vs_true_labels": 0.634578521790798,
+      "spearman_with_shipped_model": 0.37866762562586226,
+      "control_auc_scores_reassigned": 0.5049807538298587
+    },
+    {
+      "seed": 11,
+      "trees": 166,
+      "auc_vs_true_labels": 0.532107520214937,
+      "spearman_with_shipped_model": -0.05966367120404763,
+      "control_auc_scores_reassigned": 0.5040352372833191
+    },
+    {
+      "seed": 12,
+      "trees": 145,
+      "auc_vs_true_labels": 0.6965511896458187,
+      "spearman_with_shipped_model": 0.4873725854097,
+      "control_auc_scores_reassigned": 0.5148040507375545
+    },
+    {
+      "seed": 13,
+      "trees": 421,
+      "auc_vs_true_labels": 0.4417228551499651,
+      "spearman_with_shipped_model": -0.09348370209134106,
+      "control_auc_scores_reassigned": 0.4822909400914516
+    },
+    {
+      "seed": 14,
+      "trees": 231,
+      "auc_vs_true_labels": 0.677271435583456,
+      "spearman_with_shipped_model": 0.5526505873059114,
+      "control_auc_scores_reassigned": 0.4876411170528817
+    },
+    {
+      "seed": 15,
+      "trees": 216,
+      "auc_vs_true_labels": 0.5870378981632179,
+      "spearman_with_shipped_model": 0.2418540159179714,
+      "control_auc_scores_reassigned": 0.5095171665504146
+    },
+    {
+      "seed": 16,
+      "trees": 143,
+      "auc_vs_true_labels": 0.5713852075744659,
+      "spearman_with_shipped_model": 0.19811541264522978,
+      "control_auc_scores_reassigned": 0.45666382495026997
+    },
+    {
+      "seed": 17,
+      "trees": 64,
+      "auc_vs_true_labels": 0.33124596347102747,
+      "spearman_with_shipped_model": -0.3280813531477035,
+      "control_auc_scores_reassigned": 0.5364850551551319
+    },
+    {
+      "seed": 18,
+      "trees": 159,
+      "auc_vs_true_labels": 0.5730372781523676,
+      "spearman_with_shipped_model": 0.17381065597690265,
+      "control_auc_scores_reassigned": 0.4791030509700587
+    },
+    {
+      "seed": 19,
+      "trees": 191,
+      "auc_vs_true_labels": 0.4372962360174636,
+      "spearman_with_shipped_model": -0.2781273565637778,
+      "control_auc_scores_reassigned": 0.5087821953550853
+    }
+  ]
+}

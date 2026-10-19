@@ -7,18 +7,24 @@ import numpy as np
 import pandas as pd
 import tempfile
 from pathlib import Path
-from backend.services.drift_detector import (
+from services.drift_detector import (
+    HAS_EVIDENTLY,
     EvidentiallyDriftDetector,
     ConceptDriftMonitor,
     DriftReport,
     DriftAlert,
 )
-from backend.services.alert_router import (
+from services.alert_router import (
     AlertRouter,
     AlertSeverity,
     WebhookAlertChannel,
     create_router_from_config,
 )
+
+# Evidently is pinned in requirements.txt (0.7.x, legacy API). These tests used
+# to swallow ImportError and skip silently, which hid that the import path was
+# broken; now a missing install skips the detector tests once, explicitly.
+requires_evidently = pytest.mark.skipif(not HAS_EVIDENTLY, reason="evidently not importable")
 
 
 @pytest.fixture
@@ -35,17 +41,17 @@ def reference_data():
 @pytest.fixture
 def detector(reference_data):
     """Create drift detector."""
-    try:
-        return EvidentiallyDriftDetector(
-            reference_data=reference_data,
-            feature_names=["feature_1", "feature_2", "feature_3"],
-            numerical_features=["feature_1", "feature_2", "feature_3"],
-            drift_threshold=0.05,
-        )
-    except ImportError:
-        pytest.skip("Evidently AI not installed")
+    if not HAS_EVIDENTLY:
+        pytest.skip("evidently not importable")
+    return EvidentiallyDriftDetector(
+        reference_data=reference_data,
+        feature_names=["feature_1", "feature_2", "feature_3"],
+        numerical_features=["feature_1", "feature_2", "feature_3"],
+        drift_threshold=0.05,
+    )
 
 
+@requires_evidently
 class TestEvidentiallyDriftDetector:
     """Test drift detection functionality."""
 
@@ -64,12 +70,12 @@ class TestEvidentiallyDriftDetector:
             "feature_3": np.random.normal(0, 1, 500),
         })
 
-        try:
-            report = detector.detect_data_drift(production_data)
-            assert isinstance(report, DriftReport)
-            assert report.report_id is not None
-        except ImportError:
-            pytest.skip("Evidently AI not installed")
+        report = detector.detect_data_drift(production_data)
+        assert isinstance(report, DriftReport)
+        assert report.report_id is not None
+        assert report.metrics["n_features"] == 3
+        assert report.metrics["n_features_drifted"] == len(report.drifted_features)
+        assert report.metrics["dataset_drift"] is False
 
     def test_detect_drift_present(self, detector):
         """Test detection when drift is present."""
@@ -80,12 +86,16 @@ class TestEvidentiallyDriftDetector:
             "feature_3": np.random.normal(0, 1, 500),
         })
 
-        try:
-            report = detector.detect_data_drift(production_data)
-            assert isinstance(report, DriftReport)
-            assert report.timestamp is not None
-        except ImportError:
-            pytest.skip("Evidently AI not installed")
+        report = detector.detect_data_drift(production_data)
+        assert isinstance(report, DriftReport)
+        assert report.timestamp is not None
+        # The shifted feature must be found, with the test's score and threshold.
+        assert "feature_1" in report.drifted_features
+        feature_1 = report.metrics["per_feature"]["feature_1"]
+        assert feature_1["drift_detected"] is True and feature_1["score"] < feature_1["threshold"]
+        alert = next(a for a in report.alerts if a["feature_name"] == "feature_1")
+        assert alert["magnitude"] == feature_1["score"]
+        assert report.metrics["drift_share"] == len(report.drifted_features) / 3
 
     def test_detect_outliers(self, detector, reference_data):
         """Test outlier detection."""
@@ -103,17 +113,17 @@ class TestEvidentiallyDriftDetector:
             }),
         ], ignore_index=True)
 
-        try:
-            report = detector.detect_outliers(production_data, sigma_threshold=3.0)
-            assert isinstance(report, DriftReport)
-            assert report.report_id is not None
-        except ImportError:
-            pytest.skip("Evidently AI not installed")
+        report = detector.detect_outliers(production_data, sigma_threshold=3.0)
+        assert isinstance(report, DriftReport)
+        assert report.report_id is not None
 
     def test_performance_drift_detection(self, detector):
         """Test performance drift detection."""
         y_true = np.array([0, 1, 0, 1, 1, 0, 1, 0, 1, 1])
-        y_pred_proba = np.array([0.1, 0.9, 0.2, 0.8, 0.85, 0.15, 0.92, 0.1, 0.88, 0.95])
+        # Scores that rank churners poorly (AUC 0.625) against a 0.95 training baseline.
+        # (The original scores ranked perfectly, AUC 1.0, so no drift alert was
+        # possible; the test always skipped, so that went unnoticed.)
+        y_pred_proba = np.array([0.1, 0.2, 0.3, 0.8, 0.15, 0.9, 0.85, 0.1, 0.25, 0.4])
         y_pred_binary = (y_pred_proba >= 0.5).astype(int)
         production_data = pd.DataFrame({
             "feature_1": np.random.rand(10),
@@ -121,19 +131,20 @@ class TestEvidentiallyDriftDetector:
             "feature_3": np.random.rand(10),
         })
 
-        try:
-            report = detector.detect_performance_drift(
-                production_data=production_data,
-                y_true=y_true,
-                y_pred_proba=y_pred_proba,
-                y_pred_binary=y_pred_binary,
-                reference_auc=0.95,
-            )
+        report = detector.detect_performance_drift(
+            production_data=production_data,
+            y_true=y_true,
+            y_pred_proba=y_pred_proba,
+            y_pred_binary=y_pred_binary,
+            reference_auc=0.95,
+        )
 
-            assert isinstance(report, DriftReport)
-            assert "model_performance" in [a["feature_name"] for a in report.alerts]
-        except ImportError:
-            pytest.skip("Evidently AI not installed")
+        assert isinstance(report, DriftReport)
+        assert "model_performance" in [a["feature_name"] for a in report.alerts]
+        assert report.metrics["production_auc"] < 0.9
+        healthy = detector.detect_performance_drift(production_data, y_true, y_true * 0.8 + 0.1,
+                                                    y_true, reference_auc=0.95)
+        assert healthy.alerts == []
 
     def test_save_report(self, detector, reference_data):
         """Test saving drift report."""
@@ -143,15 +154,12 @@ class TestEvidentiallyDriftDetector:
             "feature_3": np.random.normal(0, 1, 500),
         })
 
-        try:
-            report = detector.detect_data_drift(production_data)
+        report = detector.detect_data_drift(production_data)
 
-            with tempfile.TemporaryDirectory() as tmpdir:
-                output_path = detector.save_report(report, Path(tmpdir))
-                assert output_path.exists()
-                assert output_path.suffix == ".json"
-        except ImportError:
-            pytest.skip("Evidently AI not installed")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = detector.save_report(report, Path(tmpdir))
+            assert output_path.exists()
+            assert output_path.suffix == ".json"
 
     def test_should_retrain_logic(self, detector, reference_data):
         """Test retraining trigger logic."""
@@ -162,26 +170,25 @@ class TestEvidentiallyDriftDetector:
             "feature_4": np.random.normal(0, 1, 500),
         })
 
-        try:
-            detector.detect_data_drift(production_data)
+        shifted = detector.detect_data_drift(production_data)
+        assert {"feature_1", "feature_2", "feature_3"} <= set(shifted.drifted_features)
+        assert detector.should_retrain(shifted, drift_feature_threshold=3) is True
 
-            # Test retraining trigger with mock critical report
-            critical_report = DriftReport(
-                report_id="test",
-                timestamp=pd.Timestamp.now().isoformat(),
-                reference_period="reference",
-                production_period="production",
-                drifted_features=["f1", "f2", "f3", "f4"],
-                data_quality_issues=[],
-                alerts=[],
-                metrics={},
-                alerts_severity="critical",
-            )
+        # Test retraining trigger with mock critical report
+        critical_report = DriftReport(
+            report_id="test",
+            timestamp=pd.Timestamp.now().isoformat(),
+            reference_period="reference",
+            production_period="production",
+            drifted_features=["f1", "f2", "f3", "f4"],
+            data_quality_issues=[],
+            alerts=[],
+            metrics={},
+            alerts_severity="critical",
+        )
 
-            should_retrain = detector.should_retrain(critical_report, drift_feature_threshold=3)
-            assert should_retrain is True
-        except ImportError:
-            pytest.skip("Evidently AI not installed")
+        should_retrain = detector.should_retrain(critical_report, drift_feature_threshold=3)
+        assert should_retrain is True
 
 
 class TestConceptDriftMonitor:

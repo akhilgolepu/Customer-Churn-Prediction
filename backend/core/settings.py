@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     )
 
     secret_key: str = "change-me-in-production"
+
+    # Seeded user passwords (ADMIN_PASSWORD, ANALYST_PASSWORD, VIEWER_PASSWORD).
+    # Unset is only allowed when ENVIRONMENT=development, where insecure,
+    # publicly known defaults are used; any other environment refuses to start
+    # (see services/auth_service.py).
+    admin_password: str | None = None
+    analyst_password: str | None = None
+    viewer_password: str | None = None
     access_token_minutes: int = 30
     refresh_token_days: int = 7
     jwt_algorithm: str = "HS256"
@@ -71,6 +79,40 @@ class Settings(BaseSettings):
     prediction_drift_alert_threshold: float = 0.15
     min_outcomes_for_performance_tracking: int = 20
     minimum_recall_threshold: float = 0.55
+
+    # Default decision threshold applied when a request does not pass ?threshold=.
+    # 0.38 is the net-benefit optimum on out-of-fold calibrated validation scores
+    # under the primary cost scenario in model/training/threshold_analysis.py
+    # (docs/threshold_analysis.json); the closed-form break-even is 0.371. The
+    # served score is a calibrated probability. Keep params.yaml
+    # evaluation.decision_threshold equal to this (enforced by a test).
+    decision_threshold: float = Field(default=0.38, ge=0.0, le=1.0)
+
+    # Promotion gate (services/promotion_gate.py). The default evaluation set is
+    # the full Telco CSV, which overlaps training data: it is a sanity gate, not
+    # an unbiased estimate.
+    promotion_eval_data_path: str = str(
+        Path(__file__).resolve().parents[2] / "data" / "Telco-Customer-Churn.csv"
+    )
+    promotion_min_auc: float = 0.75
+    # Floors at decision_threshold; guardrails well below the measured operating
+    # point (test: precision 0.58, recall 0.69 at 0.38), not targets.
+    promotion_min_precision: float = 0.40
+    promotion_min_recall: float = 0.40
+    promotion_min_f1: float = 0.45
+    promotion_max_auc_drop: float = 0.02
+
+    # Standing challenger: a logistic-regression model (model/linear_model.py)
+    # kept in the shadow slot whenever no other candidate is being tested. It is
+    # scored on every request; with CANARY_ENABLED it also serves that share of
+    # traffic. Relative paths resolve against the repository root.
+    challenger_enabled: bool = True
+    challenger_artifact_path: str = "model/artifacts/logreg_challenger.json"
+    challenger_version: str = "logreg-challenger"
+
+    # GET /metrics (Prometheus). Public unless METRICS_TOKEN is set, then it needs
+    # "Authorization: Bearer <token>" (Prometheus: authorization.credentials).
+    metrics_token: str | None = None
 
     canary_enabled: bool = False
     canary_traffic_percent: int = 10
@@ -116,4 +158,7 @@ def get_settings() -> Settings:
     allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "").strip()
     allowed_origins = _parse_allowed_origins(allowed_origins_raw) if allowed_origins_raw else ["http://localhost:5173"]
     
-    return Settings(allowed_origins=allowed_origins)
+    # Must be passed by its validation alias: allowed_origins is declared with
+    # validation_alias="ALLOWED_ORIGINS_INTERNAL", so Settings(allowed_origins=...)
+    # was silently ignored and ALLOWED_ORIGINS never took effect.
+    return Settings(ALLOWED_ORIGINS_INTERNAL=allowed_origins)  # type: ignore[call-arg]  # pydantic validation_alias

@@ -1,0 +1,39 @@
+# Render Blueprint for the API. The model artifacts live in ../model, outside
+# backend/, so the service must build from the repository root (Docker context
+# ".") -- setting Render's "Root Directory" to backend/ would leave the model out
+# of the build and the API would fail to start.
+services:
+  - type: web
+    name: churn-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/v1/system/health
+    # Deploys are triggered by the approval-gated CD workflow (Render deploy hook).
+    autoDeploy: false
+    envVars:
+      # production: the API refuses to start with default/unset passwords or SECRET_KEY.
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      # Admin password: random, never shipped to the frontend. Read it from the
+      # Render dashboard when you need admin access.
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      # PUBLIC demo logins: set these to the same values as the Vercel build
+      # variables VITE_DEMO_ANALYST_PASSWORD / VITE_DEMO_VIEWER_PASSWORD. They end
+      # up in the shipped JavaScript, so treat them as public.
+      - key: ANALYST_PASSWORD
+        sync: false
+      - key: VIEWER_PASSWORD
+        sync: false
+      # Set to the exact Vercel production URL, e.g. https://your-app.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # SQLite on the container filesystem: state resets on every deploy/restart.
+      - key: DATABASE_BACKEND
+        value: sqlite
+      - key: SCHEDULE_RETRAINING_ENABLED
+        value: "false"

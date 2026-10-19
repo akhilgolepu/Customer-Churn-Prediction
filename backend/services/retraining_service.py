@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -43,12 +44,15 @@ class RetrainingOrchestrator:
     def __init__(self, model_registry_service=None, config: RetrainingConfig | None = None) -> None:
         repo_root = Path(__file__).resolve().parents[2]
         artifacts_dir = repo_root / "model" / "artifacts"
+        # RETRAINING_OUTPUT_DIR redirects retrained models and bundles (demos/tests
+        # use a temp dir instead of writing into the repository).
+        output_dir = Path(os.environ["RETRAINING_OUTPUT_DIR"]) if os.environ.get("RETRAINING_OUTPUT_DIR") else artifacts_dir
 
         self._config = config or RetrainingConfig(
             dataset_path=repo_root / "data" / "Telco-Customer-Churn.csv",
             artifacts_dir=artifacts_dir,
-            bundles_dir=artifacts_dir / "bundles",
-            retrained_dir=artifacts_dir / "retrained",
+            bundles_dir=output_dir / "bundles",
+            retrained_dir=output_dir / "retrained",
         )
         self._registry_service = model_registry_service
 
@@ -106,6 +110,7 @@ class RetrainingOrchestrator:
             learning_rate=self._config.learning_rate,
             random_seed=self._config.random_state,
             verbose=False,
+            allow_writing_files=False,  # no catboost_info/ in the working directory
         )
         model.fit(x_train, y_train, cat_features=cat_columns)
 

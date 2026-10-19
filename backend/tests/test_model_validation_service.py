@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import tempfile
 from pathlib import Path
-from backend.services.model_validation_service import (
+from services.model_validation_service import (
     ModelValidationGate,
     ModelQualityValidator,
     FairnessValidator,

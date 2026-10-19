@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import zipfile
 
+from model.calibration import calibration_path_for
 from model.preprocessing.preprocessing import build_preprocessing_spec
 
 
@@ -24,8 +25,13 @@ def build_pipeline_bundle(
     cat_columns_path: Path,
     output_dir: Path,
     version: str,
+    calibration_path: Path | None = None,
 ) -> Path:
+    """calibration_path defaults to the model's sibling <name>.calibration.json when
+    it exists; the bundle then carries it as model/calibration.json."""
     model_path = model_path.resolve()
+    if calibration_path is None and calibration_path_for(model_path).exists():
+        calibration_path = calibration_path_for(model_path)
     feature_list_path = feature_list_path.resolve()
     cat_columns_path = cat_columns_path.resolve()
     output_dir = output_dir.resolve()
@@ -60,6 +66,8 @@ def build_pipeline_bundle(
             "sha256": preprocessing_spec_hash,
         },
     ]
+    if calibration_path is not None:
+        files_manifest.append({"path": "model/calibration.json", "sha256": _sha256_file(Path(calibration_path))})
 
     manifest = {
         "artifact_format": "churn_pipeline_bundle/v1",
@@ -70,6 +78,8 @@ def build_pipeline_bundle(
 
     with zipfile.ZipFile(bundle_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.write(model_path, arcname="model/model.cbm")
+        if calibration_path is not None:
+            zf.write(calibration_path, arcname="model/calibration.json")
         zf.write(feature_list_path, arcname="preprocessing/feature_list.json")
         zf.write(cat_columns_path, arcname="preprocessing/cat_columns.json")
         zf.writestr("preprocessing/preprocessing_spec.json", preprocessing_spec_bytes)

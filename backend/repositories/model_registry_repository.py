@@ -145,6 +145,23 @@ class ModelRegistryRepository:
                     ("shadow_model_id", candidate_model_id),
                 )
 
+    def reject_shadow(self) -> str | None:
+        """Mark the current shadow candidate 'rejected' and clear the shadow slot.
+
+        Leaves the active model untouched. Returns the rejected model id, if any.
+        """
+        with self._store.lock:
+            with self._store.connection() as conn:
+                _, shadow_model_id = self._read_state_from_connection(conn)
+                if not shadow_model_id:
+                    return None
+                conn.execute("UPDATE model_versions SET status = 'rejected' WHERE id = ?", (shadow_model_id,))
+                conn.execute(
+                    "INSERT OR REPLACE INTO model_registry_state (state_key, state_value) VALUES (?, ?)",
+                    ("shadow_model_id", ""),
+                )
+                return shadow_model_id
+
     def promote(self, candidate_model_id: str) -> None:
         with self._store.lock:
             with self._store.connection() as conn:

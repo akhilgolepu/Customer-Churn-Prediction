@@ -1,12 +1,18 @@
 import asyncio
+import json
 import logging
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any  # Imported for clean static type coordination
 
-from fastapi import FastAPI
-import fastapi
+import hmac
+import time
+
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from core import prometheus
 from core.exception_handlers import register_exception_handlers
 from core.logging_config import configure_logging
 from core.migrations import run_postgres_migrations
@@ -46,9 +52,36 @@ from services.job_service import JobService, SchedulerService
 from services.model_registry_service import ModelRegistryService
 from services.monitoring_service import MonitoringService
 from services.prediction_service import PredictionService
+from services.promotion_gate import PromotionGate
 from services.recommendation_service import RecommendationService
 from services.retraining_service import RetrainingOrchestrator
 from storage.factory import build_object_storage
+
+def _portable_artifact_path(path: Path) -> str:
+    """Repo-relative path when the model lives inside the repository, so the registry
+    seed works on any machine or container (it stored an absolute Windows path)."""
+    repo_root = Path(__file__).resolve().parents[1]
+    try:
+        return path.resolve().relative_to(repo_root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _attach_challenger(model_registry_service: ModelRegistryService, settings) -> None:
+    logger = logging.getLogger(__name__)
+    path = Path(settings.challenger_artifact_path)
+    resolved = path if path.is_absolute() else Path(__file__).resolve().parents[1] / path
+    if not resolved.exists():
+        logger.warning("CHALLENGER_ENABLED but %s does not exist; run model/training/train.py", resolved)
+        return
+    try:
+        metrics = json.loads(resolved.read_text(encoding="utf-8")).get("metrics", {})
+    except (OSError, ValueError):
+        metrics = {}
+    model_registry_service.ensure_challenger(
+        settings.challenger_artifact_path, settings.challenger_version, metrics=metrics
+    )
+
 
 @dataclass
 class AppState:
@@ -100,7 +133,7 @@ def create_app() -> FastAPI:
         model_registry_repo = PostgresModelRegistryRepository(
             session_factory=session_factory,
             org_id=effective_org_id,
-            default_artifact_path=str(MODEL_PATH),
+            default_artifact_path=_portable_artifact_path(MODEL_PATH),
         )
         prediction_repo = PostgresPredictionRepository(session_factory=session_factory, org_id=effective_org_id)
         job_repo = PostgresJobRepository(session_factory=session_factory, org_id=effective_org_id)
@@ -111,7 +144,7 @@ def create_app() -> FastAPI:
         store = SQLiteStore(settings.sqlite_path)
         feedback_repo = FeedbackRepository(store=store)
         monitoring_repo = MonitoringRepository(store=store)
-        model_registry_repo = ModelRegistryRepository(store=store, default_artifact_path=str(MODEL_PATH))
+        model_registry_repo = ModelRegistryRepository(store=store, default_artifact_path=_portable_artifact_path(MODEL_PATH))
         audit_repo = AuditRepository()
 
     audit_service = AuditService(repo=audit_repo)
@@ -122,7 +155,23 @@ def create_app() -> FastAPI:
         feedback_repo=feedback_repo,
         monitoring_repo=monitoring_repo,
     )
-    model_registry_service = ModelRegistryService(repo=model_registry_repo, audit_service=audit_service)
+    promotion_gate = PromotionGate(
+        eval_data_path=settings.promotion_eval_data_path,
+        decision_threshold=settings.decision_threshold,
+        min_auc=settings.promotion_min_auc,
+        min_precision=settings.promotion_min_precision,
+        min_recall=settings.promotion_min_recall,
+        min_f1=settings.promotion_min_f1,
+        max_auc_drop=settings.promotion_max_auc_drop,
+    )
+    model_registry_service = ModelRegistryService(
+        repo=model_registry_repo, audit_service=audit_service, promotion_gate=promotion_gate
+    )
+    # Serve what the registry says (it outlives the process), then attach the
+    # standing challenger to the shadow slot if it is free.
+    model_registry_service.sync_runtime()
+    if settings.challenger_enabled:
+        _attach_challenger(model_registry_service, settings)
     canary_service = CanaryRolloutService(
         enabled=settings.canary_enabled,
         traffic_percent=settings.canary_traffic_percent,
@@ -172,6 +221,23 @@ def create_app() -> FastAPI:
     app.state.canary_service = canary_service
     app.state.audit_service = audit_service
 
+    @app.get("/metrics", include_in_schema=False)
+    def prometheus_metrics(request: Request):
+        token = get_settings().metrics_token
+        if token:
+            supplied = request.headers.get("authorization", "")
+            if not hmac.compare_digest(supplied, f"Bearer {token}"):
+                return Response(status_code=401)
+        from model_loader import runtime_manager
+
+        prometheus.refresh_state(
+            canary_service=app.state.canary_service,
+            model_registry_service=app.state.model_registry_service,
+            runtime_state=runtime_manager.state(),
+        )
+        body, content_type = prometheus.render()
+        return Response(content=body, media_type=content_type)
+
     app.middleware("http")(request_context_middleware)
     app.middleware("http")(request_size_limit_middleware)
     app.middleware("http")(rate_limit_middleware)
@@ -185,6 +251,16 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Registered last = outermost: times everything, including 429s from the rate limiter.
+    @app.middleware("http")
+    async def prometheus_timing(request: Request, call_next):
+        started = time.perf_counter()
+        response = await call_next(request)
+        route = request.scope.get("route")
+        # Route template ("/api/v1/jobs/{job_id}"), not the raw path, to bound label cardinality.
+        prometheus.observe_request(request.method, getattr(route, "path", "unmatched"), response.status_code, started)
+        return response
 
     register_exception_handlers(app)
 

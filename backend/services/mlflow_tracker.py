@@ -55,11 +55,10 @@ class MLflowExperimentTracker:
         self.client = MlflowClient(tracking_uri=tracking_uri)
         self.experiment_name = experiment_name
         
-        try:
-            self.experiment_id = self.client.get_experiment_by_name(experiment_name).experiment_id
-        except AttributeError:
-            # Experiment doesn't exist, create it
-            self.experiment_id = self.client.create_experiment(experiment_name)
+        experiment = self.client.get_experiment_by_name(experiment_name)
+        self.experiment_id = (
+            experiment.experiment_id if experiment is not None else self.client.create_experiment(experiment_name)
+        )
 
         mlflow.set_experiment(experiment_name)
         logger.info(f"MLflow tracker initialized: {experiment_name} (ID: {self.experiment_id})")
@@ -430,8 +429,8 @@ def log_cross_validation_results(fold_results: List[Dict[str, float]]):
     avg_f1 = np.mean([r.get("f1", 0) for r in fold_results])
     
     mlflow.log_metrics({
-        "cv_avg_auc": avg_auc,
-        "cv_avg_f1": avg_f1,
+        "cv_avg_auc": float(avg_auc),
+        "cv_avg_f1": float(avg_f1),
         "cv_n_folds": len(fold_results),
     })
 

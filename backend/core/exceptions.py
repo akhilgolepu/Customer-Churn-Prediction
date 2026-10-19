@@ -1,9 +1,10 @@
 class AppError(Exception):
-    def __init__(self, code: str, message: str, status_code: int = 400) -> None:
+    def __init__(self, code: str, message: str, status_code: int = 400, details: dict | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
+        self.details = details
 
 
 class UnauthorizedError(AppError):
@@ -19,6 +20,17 @@ class ForbiddenError(AppError):
 class NotFoundError(AppError):
     def __init__(self, message: str = "Not found") -> None:
         super().__init__(code="not_found", message=message, status_code=404)
+
+
+class PromotionBlockedError(AppError):
+    def __init__(self, gate_result: dict) -> None:
+        blockers = "; ".join(gate_result.get("blockers", []))
+        super().__init__(
+            code="promotion_blocked",
+            message=f"Promotion refused by the validation gate: {blockers}",
+            status_code=409,
+            details=gate_result,
+        )
 
 
 class CircuitOpenError(AppError):

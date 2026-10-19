@@ -12,5 +12,8 @@ def run_postgres_migrations(postgres_url: str) -> None:
     alembic_ini = project_root / "db" / "alembic.ini"
 
     config = Config(str(alembic_ini))
+    # alembic.ini says "db/alembic", relative to the working directory, so startup
+    # failed unless the API was launched from backend/. Use an absolute path.
+    config.set_main_option("script_location", str(project_root / "db" / "alembic"))
     config.set_main_option("sqlalchemy.url", postgres_url)
     command.upgrade(config, "head")

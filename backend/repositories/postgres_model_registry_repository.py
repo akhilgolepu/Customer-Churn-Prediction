@@ -128,6 +128,20 @@ class PostgresModelRegistryRepository:
             if candidate:
                 candidate.stage = "shadow"
 
+    def reject_shadow(self) -> str | None:
+        """Mark the current shadow candidate 'rejected'; the active model is untouched."""
+        with self._session_factory.session_scope() as session:
+            rows = session.execute(
+                select(ModelVersion)
+                .where(ModelVersion.org_id == self._org_id)
+                .where(ModelVersion.stage == "shadow")
+            ).scalars().all()
+            rejected = None
+            for row in rows:
+                row.stage = "rejected"
+                rejected = str(row.id)
+            return rejected
+
     def promote(self, candidate_model_id: str) -> None:
         candidate_id = uuid.UUID(candidate_model_id)
         with self._session_factory.session_scope() as session:

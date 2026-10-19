@@ -22,6 +22,11 @@ class PredictionRepository:
         with self._lock:
             self._items.append(item)
 
+    def recent(self, limit: int) -> list[PredictionHistoryItem]:
+        """The latest `limit` predictions, oldest first (monitoring window)."""
+        with self._lock:
+            return list(self._items[-limit:])
+
     def list_paginated(self, page: int, page_size: int, is_churn: bool | None = None) -> tuple[list[PredictionHistoryItem], int]:
         with self._lock:
             data = self._items

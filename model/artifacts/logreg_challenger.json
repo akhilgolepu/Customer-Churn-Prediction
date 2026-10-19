@@ -1,0 +1,245 @@
+{
+  "format": "churn_linear/v1",
+  "feature_order": [
+    "MonthlyCharges",
+    "tenure",
+    "TotalCharges",
+    "SeniorCitizen",
+    "TotalServices",
+    "IsFiberCustomer",
+    "IsMonthToMonth",
+    "TechIssueRisk",
+    "PaymentRisk",
+    "HasPhoneAndInternet",
+    "Partner",
+    "Dependents",
+    "PhoneService",
+    "MultipleLines",
+    "InternetService",
+    "OnlineSecurity",
+    "OnlineBackup",
+    "DeviceProtection",
+    "TechSupport",
+    "StreamingTV",
+    "StreamingMovies",
+    "Contract",
+    "PaperlessBilling",
+    "PaymentMethod",
+    "TenureGroup"
+  ],
+  "numeric": [
+    {
+      "name": "MonthlyCharges",
+      "median": 70.4,
+      "mean": 64.77646153846153,
+      "scale": 29.98563692304156,
+      "coef": -0.4922226118585093
+    },
+    {
+      "name": "tenure",
+      "median": 29.0,
+      "mean": 32.29443786982249,
+      "scale": 24.665025519054453,
+      "coef": -0.871055580751129
+    },
+    {
+      "name": "TotalCharges",
+      "median": 1385.3,
+      "mean": 2286.339952662722,
+      "scale": 2278.460131698833,
+      "coef": 0.10069694447432068
+    },
+    {
+      "name": "SeniorCitizen",
+      "median": 0.0,
+      "mean": 0.16355029585798816,
+      "scale": 0.3698669985045337,
+      "coef": 0.06289767946912848
+    },
+    {
+      "name": "TotalServices",
+      "median": 2.0,
+      "mean": 2.0572781065088757,
+      "scale": 1.8560082316069786,
+      "coef": 0.18123637959943023
+    },
+    {
+      "name": "IsFiberCustomer",
+      "median": 0.0,
+      "mean": 0.4362130177514793,
+      "scale": 0.4959145298291096,
+      "coef": 0.49297907315391715
+    },
+    {
+      "name": "IsMonthToMonth",
+      "median": 1.0,
+      "mean": 0.5505325443786983,
+      "scale": 0.4974399078869878,
+      "coef": 0.4843693340456472
+    },
+    {
+      "name": "TechIssueRisk",
+      "median": 0.0,
+      "mean": 0.4927810650887574,
+      "scale": 0.49994788426269726,
+      "coef": 0.16627287392608373
+    },
+    {
+      "name": "PaymentRisk",
+      "median": 0.0,
+      "mean": 0.3337278106508876,
+      "scale": 0.4715438039557437,
+      "coef": 0.1215201222588655
+    },
+    {
+      "name": "HasPhoneAndInternet",
+      "median": 1.0,
+      "mean": 0.6833136094674557,
+      "scale": 0.46518396423781977,
+      "coef": 0.15495552371796434
+    }
+  ],
+  "categorical": [
+    {
+      "name": "Partner",
+      "weights": {
+        "No": -0.12007870549345225,
+        "Yes": -0.12518809243279938
+      },
+      "baseline": -0.12254088580315893
+    },
+    {
+      "name": "Dependents",
+      "weights": {
+        "No": -0.025202861644138413,
+        "Yes": -0.22006393628211404
+      },
+      "baseline": -0.08317691390921188
+    },
+    {
+      "name": "PhoneService",
+      "weights": {
+        "No": 0.009478787700572734,
+        "Yes": -0.2547455856268277
+      },
+      "baseline": -0.22785411094498575
+    },
+    {
+      "name": "MultipleLines",
+      "weights": {
+        "No": -0.37199023184716845,
+        "No phone service": 0.009478787700572734,
+        "Yes": 0.1172446462203568
+      },
+      "baseline": -0.1270506433582398
+    },
+    {
+      "name": "InternetService",
+      "weights": {
+        "DSL": -0.2235194436703417,
+        "Fiber optic": 0.13748691520106188,
+        "No": -0.15923426945697933
+      },
+      "baseline": -0.052228163768393815
+    },
+    {
+      "name": "OnlineSecurity",
+      "weights": {
+        "No": 0.14682298819334785,
+        "No internet service": -0.15923426945697933,
+        "Yes": -0.23285551666261134
+      },
+      "baseline": -0.028047945496979136
+    },
+    {
+      "name": "OnlineBackup",
+      "weights": {
+        "No": 0.052752939964602535,
+        "No internet service": -0.15923426945697933,
+        "Yes": -0.13878546843386436
+      },
+      "baseline": -0.06012727840853821
+    },
+    {
+      "name": "DeviceProtection",
+      "weights": {
+        "No": -0.04962449980235062,
+        "No internet service": -0.15923426945697933,
+        "Yes": -0.036408028666915525
+      },
+      "baseline": -0.06863565679326557
+    },
+    {
+      "name": "TechSupport",
+      "weights": {
+        "No": -0.03773506238337485,
+        "No internet service": -0.15923426945697933,
+        "Yes": -0.04829746608589097
+      },
+      "baseline": -0.06693407980241398
+    },
+    {
+      "name": "StreamingTV",
+      "weights": {
+        "No": -0.24740356666232158,
+        "No internet service": -0.15923426945697933,
+        "Yes": 0.16137103819304965
+      },
+      "baseline": -0.06784769307122879
+    },
+    {
+      "name": "StreamingMovies",
+      "weights": {
+        "No": -0.21280216890149273,
+        "No internet service": -0.15923426945697933,
+        "Yes": 0.1267696404322282
+      },
+      "baseline": -0.06907784249922312
+    },
+    {
+      "name": "Contract",
+      "weights": {
+        "Month-to-month": 0.10591728259699057,
+        "One year": 0.29385004121182096,
+        "Two year": -0.645034121735057
+      },
+      "baseline": -0.039389679740881374
+    },
+    {
+      "name": "PaperlessBilling",
+      "weights": {
+        "No": -0.29020394172206726,
+        "Yes": 0.04493714379582109
+      },
+      "baseline": -0.08999184708368851
+    },
+    {
+      "name": "PaymentMethod",
+      "weights": {
+        "Bank transfer (automatic)": -0.08278612708307723,
+        "Credit card (automatic)": -0.12519532508380368,
+        "Electronic check": -0.02455029079016781,
+        "Mailed check": -0.012735054969187944
+      },
+      "baseline": -0.05622692735243736
+    },
+    {
+      "name": "TenureGroup",
+      "weights": {
+        "0-6": 0.32646880672048784,
+        "12-24": -0.30785618459401604,
+        "24-48": -0.20784246951950083,
+        "48+": 0.21491057592111973,
+        "6-12": -0.2709475264543508
+      },
+      "baseline": 0.019288145431410914
+    }
+  ],
+  "intercept": -0.5601510113135633,
+  "metrics": {
+    "val_roc_auc": 0.8399,
+    "val_pr_auc": 0.6505,
+    "val_brier": 0.1368,
+    "val_log_loss": 0.4237
+  }
+}
