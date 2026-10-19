@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   security-events: write
+  pull-requests: read  # gitleaks-action reads the PR's commits
 
 jobs:
   python-security:
@@ -77,6 +78,9 @@ jobs:
 
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
+        env:
+          # Required by gitleaks-action to scan pull_request events.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   codeql:
     name: CodeQL Analysis
