@@ -500,8 +500,10 @@ passwords `admin/admin123`, `analyst/analyst123`, `viewer/viewer123`, with a war
 `ADMIN_PASSWORD`, `ANALYST_PASSWORD` and `VIEWER_PASSWORD` to override them.
 
 Or `docker compose up --build` (frontend http://localhost:5173, API http://localhost:8000).
-`requirements.txt` is the full pinned environment (training, MLOps, docs tooling; note it is saved as
-UTF-16); the API only needs `requirements-runtime.txt`.
+`requirements.txt` is the full pinned environment (training, MLOps, docs tooling) and is what CI tests;
+the API image installs `requirements-runtime.txt`, whose pins must match it. Dependabot (minor/patch
+only) updates both; `requirements.txt` used to be UTF-16, which Dependabot could not read, so its
+runtime bumps were never tested.
 
 ### Tests
 

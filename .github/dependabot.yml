@@ -1,4 +1,9 @@
-# Weekly dependency updates, minor/patch bumps grouped per ecosystem.
+# Weekly dependency updates. Every merge to main deploys, so:
+# - Python, npm and Docker: minor/patch only, grouped. Major upgrades are done by
+#   hand on a branch (they need the full test suite and often code changes, e.g.
+#   pandas 3 is not supported by MLflow, TypeScript 7 / Vite 8 break the build).
+#   Dependabot security updates are not affected by these ignore rules.
+# - GitHub Actions: majors allowed; CI itself exercises them on the PR.
 version: 2
 updates:
   - package-ecosystem: pip
@@ -9,6 +14,9 @@ updates:
     groups:
       python-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /frontend
     schedule:
@@ -17,11 +25,21 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
   - package-ecosystem: docker
     directory: /backend
     schedule:
       interval: weekly
+    ignore:
+      # The image pins the Python minor version the test suite runs on (3.13).
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
