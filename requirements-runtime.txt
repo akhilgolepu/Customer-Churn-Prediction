@@ -2,29 +2,29 @@
 # Versions are taken from the full lock in requirements.txt. Training, MLOps,
 # docs and test tooling are intentionally left out; see requirements.txt (full
 # pinned environment) and requirements-mlops.txt.
-fastapi==0.135.1
+fastapi==0.143.3
 starlette==1.8.0
-uvicorn==0.42.0
-pydantic==2.12.5
-pydantic-settings==2.13.1
-python-dotenv==1.2.2
+uvicorn==0.54.0
+pydantic==2.14.1
+pydantic-settings==2.16.0
+python-dotenv==1.2.4
 python-jose==3.5.0
-python-multipart==0.0.22
-numpy==2.4.4
-pandas==2.2.3
+python-multipart==0.0.32
+numpy==2.5.4
+pandas==2.3.3
 # data validation (model/data_schema.py): batch files and the training schema
 pandera==0.34.1
 typeguard==4.6.0
 typing-inspect==0.9.0
 mypy-extensions==1.1.0
-scikit-learn==1.8.0
-scipy==1.17.1
+scikit-learn==1.9.1
+scipy==1.18.1
 catboost==1.2.10
-shap==0.51.0
-SQLAlchemy==2.0.48
-alembic==1.18.4
-psycopg[binary]==3.3.3
-redis==7.4.0
+shap==0.54.1
+SQLAlchemy==2.1.4
+alembic==1.20.0
+psycopg[binary]==3.3.6
+redis==7.4.1
 # GET /metrics (core/prometheus.py)
 prometheus-client==0.26.0
-requests==2.33.1
+requests==2.34.2
