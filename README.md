@@ -28,12 +28,27 @@ how to reproduce it, and what was not verified.
 | Load test | Final code, challenger attached: 20 users, 1 worker: p95 25 ms with `/explain` in the mix; capacity about 178 req/s (1 worker) and 290 req/s (2 workers) on a 16-thread desktop ([details](docs/loadtest_results.md)). Not measured on the deployed host. |
 | Shadow/canary + rollback | Exercised end to end with a healthy and a degraded candidate, including a gate refusal ([transcript](docs/demo_shadow_rollback.md)). |
 | Training/serving parity | Guarded by a test that runs in CI ([`test_feature_parity.py`](backend/tests/test_feature_parity.py)). |
-| Live backend | **Not deployed yet.** Render Blueprint and a verification script are included; fill in the URL below once deployed. |
-| Live frontend | Vercel (needs `VITE_API_URL` pointing at a live backend to work). |
+| Live backend | **Deployed** on Render (free instance, `ENVIRONMENT=production`, SQLite). `verify_deployment.py` passed all 7 checks on 2026-10-19; published default passwords are rejected (401). |
+| Live frontend | **Deployed** on Vercel against the Render API; the bundle carries only the public analyst/viewer demo logins. |
 | Database | **SQLite** by default (ephemeral on Render). **Postgres works and is tested**: full suite and the rollback demo pass on Postgres 16; six Postgres defects were found and fixed on the way ([details](#postgres)). |
 
-Live URLs: _backend: TODO after deploy_ , _frontend: TODO_ (run `scripts/verify_deployment.py` against
-them before putting them on a resume; see [Deployment](#deployment)).
+Live: **[app](https://customer-churn-prediction-alpha-one.vercel.app)** (sign in as Analyst or Viewer; the
+demo passwords are public by design) and the **[API docs](https://customer-churn-prediction-4pvg.onrender.com/docs)**.
+The free Render instance sleeps when idle, so the first request can take about a minute. Last verified
+2026-10-19 with:
+
+```text
+$ python scripts/verify_deployment.py https://customer-churn-prediction-4pvg.onrender.com     --origin https://customer-churn-prediction-alpha-one.vercel.app --password <viewer demo password> --timeout 120
+[PASS] health  (HTTP 200, 0.4s (includes any cold start))
+[PASS] ready  (HTTP 200, {'message': 'ready'})
+[PASS] CORS preflight  (HTTP 200, allow-origin=https://customer-churn-prediction-alpha-one.vercel.app)
+[PASS] login  (HTTP 200)
+[PASS] predict  (HTTP 200, probability=0.6337658154204507, 334 ms)
+[PASS] explain  (HTTP 200, top driver=tenure)
+[PASS] history (auth)  (HTTP 200)
+
+ALL CHECKS PASSED
+```
 
 ---
 
@@ -599,4 +614,6 @@ settings, `CANARY_ENABLED`, `CANARY_TRAFFIC_PERCENT`, `CANARY_MIN_SAMPLES`,
   packages (0 CRITICAL; starlette, python-multipart, setuptools, urllib3 and others); upgrading
   Starlette means a FastAPI upgrade, left to Dependabot.
 - The devcontainer was written but not built here.
-- The backend had not been deployed or verified on Render at the time of writing.
+- The live backend runs on a free Render instance with SQLite on an ephemeral disk: prediction history,
+  the audit log and registry changes reset on every deploy or restart, and promotions there are blocked
+  by the gate (no labelled evaluation data in the image) unless an admin overrides with a reason.
