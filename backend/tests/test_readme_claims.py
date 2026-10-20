@@ -8,6 +8,7 @@ until the README is updated, so the README cannot drift from the evidence.
 
 from __future__ import annotations
 
+import csv
 import json
 import re
 from pathlib import Path
@@ -80,3 +81,15 @@ def test_demo_numbers_match_the_demo_transcript():
     assert "HTTP **409**" in demo
     assert f"healthy retrain ({healthy}%)" in README
     assert f"after {rolled} requests at {degraded}% disagreement" in README
+
+
+def _locust(name: str) -> dict:
+    with (REPO_ROOT / "docs" / "loadtest" / f"{name}_stats.csv").open(encoding="utf-8") as f:
+        return next(r for r in csv.DictReader(f) if r["Name"] == "Aggregated")
+
+
+def test_load_numbers_match_the_committed_locust_csvs():
+    w1, w2 = _locust("u100_w1_mixed"), _locust("u100_w2_mixed")
+    p95_20 = sorted(int(_locust(n)["95%"]) for n in ("u20_w1_predict_only", "u20_w1_mixed", "u20_w2_mixed"))
+    assert f"About {float(w2['Requests/s']):.0f} req/s with 2 workers, {float(w1['Requests/s']):.0f} with 1" in README
+    assert f"p95 {p95_20[0]} to {p95_20[-1]} ms at 20 users" in README

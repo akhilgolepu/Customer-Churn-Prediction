@@ -25,7 +25,7 @@ verified is said plainly.
 | Decision threshold | 0.38 from stated economics (closed-form break-even 0.371); its gain over 0.50 is **not** statistically significant, and the docs say so ([ADR 0004](docs/decisions/0004-cost-based-threshold.md)). |
 | Model lifecycle | Promotion gate (409 + audited override), standing logistic-regression challenger in shadow, canary auto-rollback, runtime synced to the registry on restart ([demo](docs/demo_all.md)). |
 | Pipeline | `dvc repro`: pandera validation, training, evaluation, threshold analysis; MLflow tracking and registry; outputs reproduce byte for byte ([MLOps](docs/mlops.md)). |
-| CI | Lint, mypy, 192 tests (152 behavioural, plus checks that docs links and README numbers match the outputs) with coverage on SQLite **and** Postgres, golden predictions of the real model, image build + smoke test + Trivy, Gitleaks/CodeQL/Bandit. |
+| CI | Lint, mypy, 193 tests (152 behavioural, plus checks that docs links and README numbers match the outputs) with coverage on SQLite **and** Postgres, golden predictions of the real model, image build + smoke test + Trivy, Gitleaks/CodeQL/Bandit. |
 | Monitoring | Live drift alerts, Evidently tests, retraining trigger ([drift demo](docs/demo_drift.md)); `/metrics` + Grafana dashboard ([screenshots](docs/mlops.md#observability-prometheus--grafana)). |
 | Load | About 290 req/s with 2 workers, 178 with 1 (16-thread desktop); p95 18 to 25 ms at 20 users ([load test](docs/loadtest_results.md)). Not measured on the deployed host. |
 | Deployment | Render (API, `ENVIRONMENT=production`, SQLite) + Vercel (frontend). `verify_deployment.py` 7/7 on 2026-10-19; published default passwords are rejected. |
@@ -48,7 +48,7 @@ verified is said plainly.
   canary after 60 requests at 33.3% disagreement, while a healthy retrain (2.2%) is promoted.
   `python scripts/demo_all.py`
 - **Made an untested Postgres mode work and kept it working.** Six defects fixed (one made every
-  prediction fail after March 2026); 192 tests run on SQLite and Postgres in CI, and golden
+  prediction fail after March 2026); 193 tests run on SQLite and Postgres in CI, and golden
   predictions on a committed 500-row sample pin the real model's output to 1e-6.
   `pytest backend/tests` (and with `DATABASE_BACKEND=postgres`)
 - **Measured capacity instead of quoting a load generator's ceiling.** About 290 req/s with 2
@@ -74,7 +74,8 @@ Full tables, slices, the threshold economics and its sensitivity:
 **Why serve CatBoost if logistic regression ties it?** On this dataset the accuracy argument is
 gone, and the repo says so. CatBoost stays for native categoricals, exact TreeSHAP explanations and
 the existing serving code; logistic regression runs next to it on every request as a challenger, so
-the gap is measured on live traffic (2.97% decision disagreement in the load test). On the bank
+the gap is measured on live traffic (`churn_canary_disagreement_rate`; offline, decisions differ for
+3.4% of customers on test). On the bank
 dataset the choice reverses: CatBoost is clearly better. [ADR 0001](docs/decisions/0001-catboost-active-logreg-challenger.md)
 
 **How do you know the test numbers are not tuned?** Early stopping, the calibration method and the
@@ -203,9 +204,9 @@ $env:POSTGRES_URL = "postgresql+psycopg://churn:churn@localhost:5432/churn"
 pytest -q backend/tests
 ```
 
-Last run (Python 3.13): **192 passed, 0 skipped** on SQLite and **192 passed** on Postgres 16 (CI job
-"Backend Tests on Postgres"); line
-coverage 74% of `backend/` and `model/` (tests excluded). Without the DVC dataset only
+Last run (Python 3.13): **193 passed** locally on SQLite with the dataset present; in CI, which has
+no dataset, 192 pass and 1 skips on both SQLite and Postgres 16 (jobs "Backend Checks" and
+"Backend Tests on Postgres"). Line coverage 74% of `backend/` and `model/` (tests excluded). Without the DVC dataset only
 `test_full_training_csv_passes` skips; everything else uses the committed synthetic sample.
 
 ### Reproducing the other measurements
