@@ -141,6 +141,9 @@ Deployment, API reference and configuration: [docs/deployment.md](docs/deploymen
   are assumptions, and only a randomised holdout campaign could measure them.
 - **The canary measures divergence, not correctness.** A better model also disagrees; deciding which
   is better needs labelled outcomes ([ADR 0002](docs/decisions/0002-canary-disagreement-over-compared-requests.md)).
+- **Five HIGH vulnerabilities remain in the image** (transitive: cryptography, setuptools,
+  urllib3; fixes exist, 0 CRITICAL), and the image is 3.22 GB because it installs the full
+  dependency set ([docs/mlops.md](docs/mlops.md#ci)).
 - **Retraining uses a simpler recipe** than `train.py` (no calibration file, a different pre-check);
   moving it onto the DVC pipeline is the next step.
 
