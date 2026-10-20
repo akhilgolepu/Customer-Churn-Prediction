@@ -13,14 +13,16 @@
     },
     {
       "id": "bank_churn",
-      "name": "Bank Customer Churn",
+      "name": "Bank Customer Churn (OpenML 46911, TabArena)",
       "path": "data/external/bank-customer-churn.csv",
-      "target_column": "Exited",
-      "positive_label": 1,
+      "target_column": "churn",
+      "positive_label": "Yes",
       "task": "binary_classification",
       "domain": "banking",
-      "status": "planned",
-      "notes": "Add file to data/external/ and update feature mapping before training a challenger model."
+      "status": "evaluated",
+      "notes": "Generalisation check only, not served: python model/training/second_dataset.py -> docs/second_dataset.md",
+      "source": "https://www.openml.org/d/46911 (original: kaggle.com/datasets/gauravtopre/bank-customer-churn-dataset)",
+      "licence": "OpenML/TabArena: Public; Kaggle: Other (specified in description). Downloaded at run time, not committed."
     },
     {
       "id": "saas_subscription",

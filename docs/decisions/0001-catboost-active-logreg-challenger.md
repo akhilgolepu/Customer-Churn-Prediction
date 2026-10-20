@@ -48,4 +48,20 @@ often the two disagree on live traffic.
 - With `CANARY_ENABLED=true` the challenger would also serve `CANARY_TRAFFIC_PERCENT` of responses and
   could be auto-rolled back by the disagreement limit. Canary is off by default.
 - Every prediction now pays for a second (cheap) model evaluation, and `/predict` responses include
-  `shadowProbability`. The load test has not been re-run with the challenger attached.
+  `shadowProbability`. The load test was re-run with the challenger attached
+  ([load test results](../loadtest_results.md)).
+
+## Update: does the tie generalise? (second dataset)
+
+`python model/training/second_dataset.py` ([docs/second_dataset.md](../second_dataset.md))
+runs the same pipeline on a bank churn dataset (OpenML 46911, 10,000 customers). There
+CatBoost beats logistic regression clearly: +0.109 ROC-AUC on pooled out-of-fold scores
+(95% CI +0.099 to +0.120). A logistic regression given the two non-linear shapes a tree
+finds by itself (one-hot `products_number`, a spline on `age`) closes most of that gap,
+leaving CatBoost +0.0225 (+0.018 to +0.027) ahead.
+
+So the Telco tie is a property of the Telco data (its signal is close to linear in the
+encoded features), not evidence that boosting is unnecessary for churn. That supports
+keeping both models in place: the challenger setup measures the gap on live traffic
+instead of assuming it.
+
