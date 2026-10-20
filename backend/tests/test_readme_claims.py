@@ -1,9 +1,11 @@
-"""The README's headline numbers must match the generated outputs they come from.
+"""Hand-written numbers must match the generated outputs they come from.
 
 Each claim is recomputed from the committed results of a pipeline command
-(docs/*.json, docs/demo_all.md) and the exact formatted string must appear in
-README.md. Re-running a command that changes a number makes this test fail
-until the README is updated, so the README cannot drift from the evidence.
+(docs/*.json, docs/demo_all.md, docs/loadtest/*.csv) and the exact formatted
+string must appear in the hand-written pages that quote it: README.md, or for
+the detail moved out of it, docs/interview_notes.md and docs/results.md.
+Re-running a command that changes a number makes this test fail until the
+pages are updated, so they cannot drift from the evidence.
 """
 
 from __future__ import annotations
@@ -17,6 +19,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 README = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+QUOTED = "\n".join(
+    (REPO_ROOT / p).read_text(encoding="utf-8") for p in ("README.md", "docs/interview_notes.md", "docs/results.md")
+)
 
 
 def _json(name: str) -> dict:
@@ -50,8 +55,6 @@ def claims() -> list[tuple[str, str]]:
         ("test ROC-AUC", f"{shipped['calibrated']['roc_auc']:.3f} (95% CI {shipped['roc_auc_ci'][0]:.3f} to {shipped['roc_auc_ci'][1]:.3f})"),
         ("CV AUC difference vs LR", f"{_signed(cv['roc_auc']['diff'], 4)}, 95% CI {_signed(cv['roc_auc']['ci_low'], 4)} to {_signed(cv['roc_auc']['ci_high'], 4)}"),
         ("CV Brier difference vs LR", f"{_signed(cv['brier']['diff'], 4)} [{_ci(cv['brier'], 4)}]"),
-        ("served test AUC/Brier", f"| {shipped['calibrated']['roc_auc']:.4f} | {shipped['calibrated']['brier']:.4f} |"),
-        ("challenger test AUC/Brier", f"| {chal['challenger']['roc_auc']:.4f} | {chal['challenger']['brier']:.4f} |"),
         ("decision disagreement", f"{chal['disagreement_rate_at_threshold']:.1%} of customers"),
         ("ECE served", f"ECE {shipped['ece_calibrated']:.3f}"),
         ("ECE old weighted", f"{ev['reliability_test']['CatBoost, balanced class weight']['ece']:.3f}"),
@@ -69,8 +72,29 @@ def claims() -> list[tuple[str, str]]:
 
 
 @pytest.mark.parametrize("name, expected", claims(), ids=[c[0] for c in claims()])
-def test_readme_states_the_measured_number(name, expected):
-    assert expected in README, f"README should contain {expected!r} for {name}"
+def test_quoted_number_matches_its_source(name, expected):
+    assert expected in QUOTED, f"README/interview notes/results should contain {expected!r} for {name}"
+
+
+def _cell(d: dict) -> str:
+    return f"{d['mean']:.4f} [{d['ci_low']:.4f}, {d['ci_high']:.4f}]"
+
+
+def test_readme_results_table_matches_cross_validation():
+    cv = _json("evaluation.json")["cv"]
+    for key in ("logistic_regression", "catboost", "lightgbm"):
+        row = f"| {_cell(cv[key]['roc_auc'])} | {_cell(cv[key]['brier'])} |"
+        assert row in README, f"README CV row for {key} should be {row!r}"
+
+
+def test_readme_states_the_cost_assumptions():
+    th = _json("threshold_analysis.json")
+    p = th["scenarios"]["margin_with_incentive"]
+    assert f"a ${p['offer_cost']:.0f} retention offer, a {p['save_rate']:.0%} save rate" in README
+    readme = README.replace("\r\n", "\n")
+    value = (f"{th['horizon_months']} months x ${th['mean_monthly_charge_of_churners_train_val']:.2f} mean\n"
+             f"monthly charge x {p['margin']:.0%} margin = ${p['value_per_retained_customer']:.2f}")
+    assert value in readme
 
 
 def test_demo_numbers_match_the_demo_transcript():
@@ -79,8 +103,16 @@ def test_demo_numbers_match_the_demo_transcript():
     rolled = re.search(r"auto-rolled back after \*\*(\d+)\*\* requests", demo).group(1)
     degraded = re.search(r"rate \*\*([\d.]+)%\*\* \(limit", demo.split("Degraded retrain")[1]).group(1)
     assert "HTTP **409**" in demo
-    assert f"healthy retrain ({healthy}%)" in README
-    assert f"after {rolled} requests at {degraded}% disagreement" in README
+    assert f"healthy retrain ({healthy}%)" in QUOTED
+    assert f"after {rolled} requests at {degraded}% disagreement" in QUOTED
+
+
+def test_dashboard_states_the_measured_test_auc():
+    """The frontend header quotes the test AUC; it once showed an unmeasured "F1 0.73"."""
+    dashboard = (REPO_ROOT / "frontend" / "src" / "pages" / "Dashboard.tsx").read_text(encoding="utf-8")
+    auc = _json("evaluation.json")["shipped_test"]["calibrated"]["roc_auc"]
+    assert f"Test ROC-AUC:</span> {auc:.3f}" in dashboard
+    assert "F1 0.73" not in dashboard
 
 
 def _locust(name: str) -> dict:

@@ -9,12 +9,12 @@ stages:
       size: 977501
     - path: model/data_schema.py
       hash: md5
-      md5: 5dbdf91be5746ed2e1a62d062165423a
-      size: 6422
+      md5: 2a1c7845197a04afe990459d00e7efbf
+      size: 6564
     - path: model/training/validate_data.py
       hash: md5
-      md5: 21d715c99a877f447e6ac493cfc034a2
-      size: 1995
+      md5: a298ee25e033c150ec4d5229f0b02d72
+      size: 2049
     params:
       params.yaml:
         data:
@@ -46,28 +46,28 @@ stages:
       size: 542
     - path: model/calibration.py
       hash: md5
-      md5: 1d2de336c654fdace783fbb8e6d99c54
-      size: 4131
+      md5: d38fdf4189ca6d9a08b7bfd02bb74afb
+      size: 4238
     - path: model/linear_model.py
       hash: md5
-      md5: fe492c055de95c812b60776ada21d81e
-      size: 4964
+      md5: d58c4aead4ad1a1d308fb12fc9b706c4
+      size: 5079
     - path: model/preprocessing/preprocessing.py
       hash: md5
       md5: 1605756618ac280cb8f6cf32020920e9
       size: 7333
     - path: model/tracking.py
       hash: md5
-      md5: 268c2468040b9c9623101032206d6d29
-      size: 3520
+      md5: dffc49593ee38881cce19e06185e1052
+      size: 3614
     - path: model/training/common.py
       hash: md5
-      md5: 1517599ab69049e6f101039cce3019ee
-      size: 10162
+      md5: 7089064082504a06e1d446612e1e65c8
+      size: 10446
     - path: model/training/train.py
       hash: md5
-      md5: e253dde6e8d1188df1208e8ba19f56f5
-      size: 7682
+      md5: ddb484d4b019b23092b2463f1cc2b0e9
+      size: 7859
     - path: reports/data_validation.json
       hash: md5
       md5: ddc5caa9f621d0acb67a45506c171686
@@ -119,7 +119,7 @@ stages:
           calibration_path: model/artifacts/catboost_churn.calibration.json
           challenger_path: model/artifacts/logreg_challenger.json
           training_metadata_path: model/artifacts/training_metadata.json
-          metrics_path: metrics.json
+          metrics_path: reports/metrics.json
         split:
           test_size: 0.2
           val_size: 0.2
@@ -131,7 +131,7 @@ stages:
       size: 81
     - path: model/artifacts/catboost_churn.cbm
       hash: md5
-      md5: 88158cda020be54015afded170a443c5
+      md5: a7b701d21b5636efc99d437047423d3f
       size: 147660
     - path: model/artifacts/logreg_challenger.calibration.json
       hash: md5
@@ -143,7 +143,7 @@ stages:
       size: 6149
     - path: model/artifacts/training_metadata.json
       hash: md5
-      md5: 4c92c9ff8a8cae606d3f53edb2dbf872
+      md5: cd94f39accbcaf42b810a684b5a43d84
       size: 3166
   evaluate:
     cmd: python model/training/evaluate.py
@@ -158,7 +158,7 @@ stages:
       size: 81
     - path: model/artifacts/catboost_churn.cbm
       hash: md5
-      md5: 88158cda020be54015afded170a443c5
+      md5: a7b701d21b5636efc99d437047423d3f
       size: 147660
     - path: model/artifacts/logreg_challenger.json
       hash: md5
@@ -166,12 +166,12 @@ stages:
       size: 6149
     - path: model/training/common.py
       hash: md5
-      md5: 1517599ab69049e6f101039cce3019ee
-      size: 10162
+      md5: 7089064082504a06e1d446612e1e65c8
+      size: 10446
     - path: model/training/evaluate.py
       hash: md5
-      md5: e3423d73af9d2ae8d123c527b41aee9c
-      size: 20215
+      md5: 3cda0080e5040acd2f38082dd393defb
+      size: 20677
     params:
       params.yaml:
         bootstrap:
@@ -235,7 +235,7 @@ stages:
       hash: md5
       md5: 160d808ed2d793be7026be65d5305bc7
       size: 2604
-    - path: metrics.json
+    - path: reports/metrics.json
       hash: md5
       md5: 87a553c8d85e1567adad08d19ceca711
       size: 477
@@ -252,12 +252,12 @@ stages:
       size: 81
     - path: model/artifacts/catboost_churn.cbm
       hash: md5
-      md5: 88158cda020be54015afded170a443c5
+      md5: a7b701d21b5636efc99d437047423d3f
       size: 147660
     - path: model/training/threshold_analysis.py
       hash: md5
-      md5: f2ea339715ad89ca4ea614c11d2ef36d
-      size: 9362
+      md5: 832639ef6093a16b0be7ce99ff4501e1
+      size: 9562
     params:
       params.yaml:
         bootstrap:
@@ -309,21 +309,21 @@ stages:
       size: 977501
     - path: data/dataset_catalog.json
       hash: md5
-      md5: 57b20ba880c9dd2fa6f88e6712957bce
-      size: 1170
+      md5: 44369aff1e63b77942b56d3d67bc752b
+      size: 1465
     - path: model/training/build_dataset_report.py
       hash: md5
       md5: 2258fe66e7c246372fbb9f6fcc741394
       size: 2258
     - path: model/training/dataset_registry.py
       hash: md5
-      md5: edee638a492f18a3b19e032de5b6198f
-      size: 3700
+      md5: bdaa7ccb6bc3d465ff75148a35e18090
+      size: 3797
     outs:
     - path: data/dataset_report.md
       hash: md5
-      md5: 8a31cc0688e0003b9fcb5fa073dd3788
-      size: 864
+      md5: 68de30f28827451a7f2b5d7ebf60e835
+      size: 1013
   ci_golden:
     cmd: python scripts/make_ci_sample.py --golden
     deps:
@@ -337,12 +337,12 @@ stages:
       size: 81
     - path: model/artifacts/catboost_churn.cbm
       hash: md5
-      md5: 88158cda020be54015afded170a443c5
+      md5: a7b701d21b5636efc99d437047423d3f
       size: 147660
     - path: scripts/make_ci_sample.py
       hash: md5
-      md5: b51019d2673d34c8c937132c62d63b83
-      size: 5605
+      md5: 47bae6492d20f8d3c5d1c9bdea42b423
+      size: 5728
     outs:
     - path: data/ci_sample_golden.json
       hash: md5

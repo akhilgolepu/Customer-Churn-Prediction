@@ -11,9 +11,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# Install only what the API needs at runtime (the full dev/MLOps lock is requirements.txt)
-COPY requirements-runtime.txt .
-RUN pip install --no-cache-dir -r requirements-runtime.txt
+# One dependency file for the image, CI and development: the image runs exactly what the tests ran.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the backend code into the container
 COPY backend/ /app/backend/

@@ -440,17 +440,16 @@ export default function Dashboard({ role, teamName }: DashboardProps) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-4">
               <p>
-                <span className="font-semibold">Model:</span> CatBoost + SHAP
-                <InfoTip content="CatBoost predicts churn probability; SHAP explains which input features most influenced that prediction." />
+                <span className="font-semibold">Model:</span> calibrated CatBoost + SHAP
+                <InfoTip content="CatBoost predicts a calibrated churn probability; SHAP explains which input features most influenced that prediction." />
               </p>
-              <p><span className="font-semibold">Last trained:</span> Mar 2026</p>
-              <p><span className="font-semibold">Dataset:</span> 7,043 records</p>
+              <p><span className="font-semibold">Dataset:</span> IBM Telco, 7,043 customers</p>
               <p>
-                <span className="font-semibold">Validation:</span> AUC 0.84 / F1 0.73
-                <InfoTip content="AUC measures ranking quality across thresholds. F1 balances precision and recall for churn detection." />
+                <span className="font-semibold">Test ROC-AUC:</span> 0.846
+                <InfoTip content="Measured once on the held-out 20% test split (1,409 customers), after model choices were made on a separate validation split. AUC measures ranking quality across all thresholds." />
               </p>
             </div>
-            <span className="rounded-full bg-surface px-3 py-1 text-xs font-semibold text-accent">Production-style simulation panel</span>
+            <span className="rounded-full bg-surface px-3 py-1 text-xs font-semibold text-accent">Public demo data</span>
           </div>
         </div>
 

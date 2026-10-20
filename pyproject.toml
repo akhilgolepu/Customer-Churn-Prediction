@@ -1,0 +1,30 @@
+# Tool configuration. Dependencies live in requirements.txt (one pinned file for
+# the API image, CI and development); this project is not installed as a package.
+
+[project]
+name = "customer-churn-predictor"
+version = "1.0.0"
+description = "Churn scoring API with calibrated models, a cost-based threshold and a shadow/canary model lifecycle"
+requires-python = ">=3.13"
+
+[tool.ruff]
+target-version = "py313"
+extend-exclude = ["notebooks", "frontend"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+
+[tool.mypy]
+# Non-strict type checking for the API (CI: `mypy backend`).
+python_version = "3.13"
+ignore_missing_imports = true
+explicit_package_bases = true
+mypy_path = "backend"
+exclude = "(^|/)(tests|__pycache__)/"
+
+[tool.coverage.run]
+source = ["backend", "model"]
+omit = ["*/tests/*", "*/__pycache__/*", "backend/db/alembic/*"]
+
+[tool.coverage.report]
+skip_empty = true

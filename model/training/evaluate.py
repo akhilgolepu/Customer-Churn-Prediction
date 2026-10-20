@@ -14,7 +14,7 @@
 Nothing here chooses anything; it only measures.
 
 Outputs: docs/model_comparison.md, docs/reliability_diagram.png,
-docs/slice_metrics.md, docs/evaluation.json, metrics.json
+docs/slice_metrics.md, docs/evaluation.json, reports/metrics.json
 
 Usage:
     python model/training/evaluate.py
@@ -439,7 +439,7 @@ def main() -> None:
     log_evaluation(params, metrics)
     print(json.dumps({"cv_roc_auc": {k: round(v["roc_auc"]["mean"], 4) for k, v in cv_summary.items()},
                       "shipped_test": evaluation["shipped_test"]}, indent=2))
-    print("Wrote docs/model_comparison.md, docs/slice_metrics.md, docs/reliability_diagram.png, docs/evaluation.json, metrics.json")
+    print("Wrote docs/model_comparison.md, docs/slice_metrics.md, docs/reliability_diagram.png, docs/evaluation.json, reports/metrics.json")
 
 
 if __name__ == "__main__":

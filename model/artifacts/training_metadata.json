@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-10-18T17:11:54.061649+00:00",
+  "trained_at": "2026-10-20T06:15:34.838962+00:00",
   "model": "catboost",
   "class_weight": null,
   "params": {
@@ -99,8 +99,8 @@
   },
   "mlflow": {
     "tracking_store": "sqlite:///mlflow.db (repo root)",
-    "run_id": "8189c3bc97b84ac283228943e0ff4283",
-    "catboost_model_uri": "models:/churn-catboost/2",
-    "challenger_model_uri": "models:/churn-logreg-challenger/2"
+    "run_id": "c0acfd85851142849e23b6f1b252b80d",
+    "catboost_model_uri": "models:/churn-catboost/3",
+    "challenger_model_uri": "models:/churn-logreg-challenger/3"
   }
 }

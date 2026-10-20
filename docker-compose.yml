@@ -12,7 +12,7 @@ services:
       DATABASE_BACKEND: ${DATABASE_BACKEND:-sqlite}
       SQLITE_PATH: ${SQLITE_PATH:-/app/backend/data/app.db}
       POSTGRES_URL: ${POSTGRES_URL:-postgresql+psycopg://churn:churn@postgres:5432/churn}
-      ALLOWED_ORIGINS: '["http://localhost:5173"]'
+      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-["http://localhost:5173"]}'
       OBJECT_STORAGE_PROVIDER: none
       SCHEDULE_RETRAINING_ENABLED: "true"
       PREDICT_RATE_LIMIT_PER_MINUTE: ${PREDICT_RATE_LIMIT_PER_MINUTE:-30}

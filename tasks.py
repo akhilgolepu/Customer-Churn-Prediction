@@ -49,7 +49,7 @@ def setup(args) -> None:
     if not VENV_PY.exists() and not NO_VENV:
         run([sys.executable, "-m", "venv", str(VENV)])
     run([py(), "-m", "pip", "install", "--upgrade", "pip"])
-    run([py(), "-m", "pip", "install", "-r", "requirements.txt", "-r", "requirements-dev.txt"])
+    run([py(), "-m", "pip", "install", "-r", "requirements.txt"])
     if args.frontend:
         npm = shutil.which("npm")
         if not npm:

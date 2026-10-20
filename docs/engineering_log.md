@@ -99,3 +99,29 @@ Test and tooling hygiene
     every generated report was byte-identical under both versions.
 17. My own `tasks.py loadtest` left uvicorn's worker processes running on Windows (`terminate()`
     stops only the parent); it now stops the whole process tree.
+
+## Packaging and audit pass (2026-10-20)
+
+1. **The dashboard header showed numbers nobody measured**: "Validation: AUC 0.84 / F1 0.73" and
+   "Last trained: Mar 2026" were hard-coded in `Dashboard.tsx`; no command in the repo produces that
+   F1 (it depends on a threshold that is not stated). It now shows the measured test ROC-AUC (0.846).
+   [`test_dashboard_states_the_measured_test_auc`]
+2. **The README quoted "2.97% decision disagreement in the load test"**, which no committed output
+   backs. Replaced with the offline 3.4% from `docs/evaluation.json` and the live metric's name; the
+   load-test CSVs behind the throughput numbers are now committed in `docs/loadtest/`.
+   [`test_load_numbers_match_the_committed_locust_csvs`]
+3. **`dvc.lock` was stale on `main`**: Tier 3 edited pipeline dependencies (`common.py`,
+   `dataset_registry.py`, the dataset catalog) without re-running DVC, so `dvc status` reported every
+   stage as changed. `dvc repro` re-ran in 5 min 12 s; every report, the threshold analysis and the
+   golden predictions came out byte-identical, and the model differs only in CatBoost's random
+   `model_guid`. The README's "reproduce byte for byte" was too strong for the `.cbm` file and is
+   reworded.
+4. **The README said the whole suite passed on Postgres**, but CI has no dataset and skips the
+   full-dataset check there too. The counts now say what CI reports.
+5. **Three requirement files could drift** (and a fourth, `requirements-mlops.txt`, was unpinned and
+   unused). Replaced by one pinned `requirements.txt` of direct dependencies, cut from a 232-line
+   environment freeze that included unused packages (Celery, Litestar, Flask, Graphene).
+   [`test_every_imported_package_is_declared`]
+6. `docker-compose.yml` hard-coded `ALLOWED_ORIGINS`, so the frontend could not be opened on any origin
+   other than `http://localhost:5173`; it is now overridable, with the same default.
+

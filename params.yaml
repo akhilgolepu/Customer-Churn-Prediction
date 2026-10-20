@@ -95,4 +95,4 @@ output:
   # Logistic-regression challenger served in the shadow slot (CHALLENGER_ENABLED).
   challenger_path: model/artifacts/logreg_challenger.json
   training_metadata_path: model/artifacts/training_metadata.json
-  metrics_path: metrics.json
+  metrics_path: reports/metrics.json

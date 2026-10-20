@@ -72,7 +72,7 @@ stages:
       - docs/evaluation.json:
           cache: false
     metrics:
-      - metrics.json:
+      - reports/metrics.json:
           cache: false
 
   threshold_analysis:

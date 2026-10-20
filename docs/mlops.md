@@ -67,14 +67,14 @@ replayed rows.
 ### Reproducible pipeline (DVC + MLflow)
 
 `dvc repro` rebuilds everything from the raw CSV; `dvc.yaml` declares the stages and their
-dependencies, `params.yaml` the settings, `dvc.lock` the hashes of the last run, and `metrics.json`
+dependencies, `params.yaml` the settings, `dvc.lock` the hashes of the last run, and `reports/metrics.json`
 the headline test metrics (`dvc metrics show`).
 
 | Stage | Command | Outputs |
 |---|---|---|
 | `validate_data` | `model/training/validate_data.py` | `reports/data_validation.json` (fails the pipeline on bad data) |
 | `train` | `model/training/train.py` | CatBoost + calibration, logistic-regression challenger, `training_metadata.json`; logs the run to MLflow and registers both models |
-| `evaluate` | `model/training/evaluate.py` | model comparison, slices, reliability diagram, `metrics.json`; logs test metrics to MLflow, linked to the training run |
+| `evaluate` | `model/training/evaluate.py` | model comparison, slices, reliability diagram, `reports/metrics.json`; logs test metrics to MLflow, linked to the training run |
 | `threshold_analysis` | `model/training/threshold_analysis.py` | `docs/threshold_analysis.json` |
 | `ci_golden` | `scripts/make_ci_sample.py --golden` | golden predictions for the CI sample |
 | `dataset_report` | `model/training/build_dataset_report.py` | `data/dataset_report.md` |
@@ -82,13 +82,16 @@ the headline test metrics (`dvc metrics show`).
 `dvc repro -f` (all stages forced) ran end to end in 5 min 10 s (`dvc repro -f`, all stages forced; a later `dvc repro` that re-ran the five
 changed stages took 7 min 16 s) on this machine and reproduced every
 generated document byte for byte (the `.cbm` file's bytes differ between runs; every prediction derived
-from it, and so every report, is identical).
+from it, and so every report, is identical). Re-run on 2026-10-20 after the Tier 3 changes (`dvc repro`,
+5 min 12 s): every report, the threshold analysis and the golden predictions were byte-identical; the
+`.cbm` differed only in CatBoost's random `model_guid` (37 bytes), and `training_metadata.json` only in
+its timestamp and MLflow run id.
 
 MLflow: local store `sqlite:///mlflow.db` with artifacts in `mlartifacts/` (both git-ignored;
 `MLFLOW_TRACKING_URI` overrides). `train.py` registers `churn-catboost` and `churn-logreg-challenger`;
 the API loads registered models by URI, so `POST /api/v1/models/register` accepts
-`"artifact_path": "models:/churn-catboost/1"` (needs `mlflow` installed; the slim API image does not
-have it, so use a file or object-storage path there).
+`"artifact_path": "models:/churn-catboost/1"` (the API image installs `requirements.txt`, so `mlflow` is available; the deployed instance has
+no MLflow store, so use a file or object-storage path there).
 
 There is **no DVC remote**: `.dvc/config` is empty, so `dvc pull` cannot work. Place the IBM Telco CSV
 at `data/Telco-Customer-Churn.csv` yourself.
@@ -201,7 +204,7 @@ promoted v2). Getting there meant fixing six defects in a path that had never be
 `tasks.py` is a cross-platform task runner (Windows has no `make`); the `Makefile` delegates to it:
 
 ```bash
-python tasks.py setup [--frontend]     # .venv + requirements.txt + requirements-dev.txt (+ npm ci)
+python tasks.py setup [--frontend]     # .venv + requirements.txt (+ npm ci)
 python tasks.py test | lint | train | demo | loadtest | up [--observability] | down
 make setup test lint train demo loadtest up down   # same, where make exists
 ```
@@ -209,13 +212,66 @@ make setup test lint train demo loadtest up down   # same, where make exists
 `.devcontainer/devcontainer.json`: Python 3.13, Node 20, Docker CLI against the host daemon;
 `postCreateCommand` runs `tasks.py setup --frontend`.
 
-Checked from a fresh `git clone` of the pushed branch (no dataset, no venv): `python tasks.py setup`
-took 6 min 27 s, then `python tasks.py test` gave 149 passed, 1 skipped (the full-dataset check) and
-`python tasks.py lint` was clean. **`python tasks.py up` from that clone was not verified**: Docker Hub
-pulls hung on this machine at the time. The same compose file built and ran from the working copy
-(API, Prometheus, Grafana, Postgres), but the **frontend container was never built** in this pass.
-The frontend image now gets `VITE_API_URL` as a build argument (default `http://localhost:8000`)
-instead of relying on the committed `frontend/.env`, which the security notes say to untrack.
+Checked from a fresh `git clone` (no dataset, no venv) on 2026-10-20: `python tasks.py setup` took
+2 min 8 s, `python tasks.py test` gave all passed but the one full-dataset check (skipped), `python
+tasks.py demo` passed in 38 s and `python tasks.py lint` was clean.
+
+## Running locally
+
+Python 3.13; Node 18+ for the frontend outside Docker. The API and the tests do not need the Telco
+CSV; training, the demos and the promotion gate's evaluation data do (`data/Telco-Customer-Churn.csv`,
+not committed, no DVC remote).
+
+**Dependencies: one file.** `requirements.txt` pins every direct dependency (API, training, MLOps,
+tests, lint, load test) and is what the API image, CI and `tasks.py setup` install;
+`backend/tests/test_requirements.py` fails if the code imports a package it does not declare or a pin
+is loose. Transitive dependencies are resolved by pip at install time. The trade-off, measured on
+2026-10-20: the API image grew from 2.08 GB (runtime-only file) to 3.22 GB, while the running API's
+memory after a predict and an explain stayed the same (239 MiB vs 247 MiB in `docker stats`), because
+the API never imports the training and MLOps packages.
+
+```bash
+python tasks.py setup --frontend   # .venv + requirements.txt + npm ci
+python tasks.py up                 # docker compose: API http://localhost:8000/docs, frontend http://localhost:5173
+python tasks.py up --observability # + Prometheus :9090, Grafana :3000
+python tasks.py down
+```
+
+By hand, without Docker:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --reload
+cd frontend; npm install; npm run dev
+```
+
+Locally (`ENVIRONMENT=development`, the default) the seeded users fall back to the published
+passwords `admin/admin123`, `analyst/analyst123`, `viewer/viewer123`, with a warning in the log; set
+`ADMIN_PASSWORD`, `ANALYST_PASSWORD` and `VIEWER_PASSWORD` to override them. If port 5173 is served by
+something else on `localhost`, open the frontend at `http://127.0.0.1:5173` and start the stack with
+`ALLOWED_ORIGINS='["http://localhost:5173","http://127.0.0.1:5173"]'`.
+
+**Postgres:**
+
+```powershell
+docker compose --profile postgres up -d postgres
+$env:DATABASE_BACKEND = "postgres"
+$env:POSTGRES_URL = "postgresql+psycopg://churn:churn@127.0.0.1:5432/churn"
+pytest -q backend/tests                                      # the suite against Postgres
+$env:DATABASE_BACKEND = "postgres"; docker compose --profile postgres up -d --build backend   # the API container on Postgres
+```
+
+**Verified with Docker on 2026-10-20** (Docker 29.6.1, from the working copy):
+
+| Check | Result |
+|---|---|
+| `docker compose build backend` (single `requirements.txt`) | built in 4 min 39 s, 3.22 GB |
+| `docker compose build frontend` | built in 1 min 9 s (first time this image was verified) |
+| `docker compose up backend frontend` | API healthy in about 33 s; `verify_deployment.py` 7/7 against it; dashboard signs in, predicts and shows SHAP drivers in a browser |
+| API container on Postgres (`DATABASE_BACKEND=postgres`) | `verify_deployment.py` 7/7; the prediction row is in the `predictions` table |
+| Test suite against the Postgres 16 container | all tests passed |
+| `--profile observability` | Prometheus target `churn-api` up, `churn_predictions_total` scraped; Grafana healthy with the dashboard provisioned |
 
 ## Code notes
 
