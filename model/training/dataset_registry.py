@@ -23,6 +23,8 @@ class DatasetEntry:
     domain: str
     status: str
     notes: str
+    source: str = ""
+    licence: str = ""
 
     @property
     def absolute_path(self) -> Path:
@@ -55,7 +57,7 @@ class DatasetRegistry:
     def validate(self) -> list[str]:
         issues: list[str] = []
         for dataset in self._datasets:
-            if dataset.status == "planned":
+            if dataset.status != "active":  # planned/evaluated datasets are optional downloads
                 continue
             if not dataset.absolute_path.exists():
                 issues.append(

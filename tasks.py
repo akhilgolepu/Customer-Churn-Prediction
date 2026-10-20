@@ -4,7 +4,7 @@
     python tasks.py test       # backend test suite with coverage
     python tasks.py lint       # ruff + mypy (non-strict, backend/)
     python tasks.py train      # dvc repro: validate -> train -> evaluate -> threshold (needs the dataset)
-    python tasks.py demo       # shadow/rollback demo + drift demo, transcripts in docs/
+    python tasks.py demo       # end-to-end demo (predict, explain, gate, rollback, drift) -> docs/demo_all.md
     python tasks.py loadtest [--users 20 --spawn-rate 5 --duration 60s --workers 1 --explain-weight 1]
     python tasks.py up         # docker compose up --build (API :8000, frontend :5173)
     python tasks.py up --observability   # + Prometheus :9090, Grafana :3000
@@ -81,8 +81,8 @@ def demo(args) -> None:
     if not DATASET.exists():
         sys.exit("The demos replay held-out rows and build candidates from data/Telco-Customer-Churn.csv.")
     run([py(), "model/training/build_demo_candidates.py"])
-    run([py(), "scripts/demo_shadow_rollback.py", "--out", "docs/demo_shadow_rollback.md"])
-    run([py(), "scripts/demo_drift.py", "--out", "docs/demo_drift.md"])
+    # predict + explain, gate/shadow/rollback, drift -> docs/demo_all.md
+    run([py(), "scripts/demo_all.py", "--out", "docs/demo_all.md"])
 
 
 def _wait_for(url: str, seconds: int = 90) -> None:
