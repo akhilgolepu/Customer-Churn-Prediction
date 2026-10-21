@@ -13,7 +13,9 @@ RUN apt-get update && \
 
 # One dependency file for the image, CI and development: the image runs exactly what the tests ran.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# pip is not needed at runtime; removing it also drops the certifi copy it vendors
+# (flagged CRITICAL by the image scan, GHSA-6q48-6c7w-9gw2).
+RUN pip install --no-cache-dir -r requirements.txt && pip uninstall -y pip
 
 # Copy the backend code into the container
 COPY backend/ /app/backend/
