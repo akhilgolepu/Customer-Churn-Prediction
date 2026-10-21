@@ -1,4 +1,4 @@
-# Render Blueprint for the API. The model artifacts live in ../model, outside
+# Render Blueprint for the API. The ML code (ml/) and artifacts (models/) live outside
 # backend/, so the service must build from the repository root (Docker context
 # ".") -- setting Render's "Root Directory" to backend/ would leave the model out
 # of the build and the API would fail to start.

@@ -29,7 +29,7 @@ shap==0.51.0
 pandera==0.34.1
 PyYAML==6.0.3
 
-# --- Training, evaluation and MLOps (model/training/, dvc.yaml) ---
+# --- Training, evaluation and MLOps (ml/training/, dvc.yaml) ---
 lightgbm==4.7.0
 matplotlib==3.10.8
 mlflow==3.15.0

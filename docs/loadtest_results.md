@@ -10,7 +10,7 @@ python tasks.py loadtest --users 20 --spawn-rate 5 --duration 60s --workers 1   
 python tasks.py loadtest --users 20 --spawn-rate 5 --duration 60s --workers 2
 python tasks.py loadtest --users 100 --spawn-rate 20 --duration 60s --workers 1
 python tasks.py loadtest --users 100 --spawn-rate 20 --duration 60s --workers 2
-# CSVs: loadtest/results/u<users>_w<workers>_stats.csv (git-ignored); the runs below are committed in docs/loadtest/
+# CSVs: loadtest/results/u<users>_w<workers>_stats.csv (git-ignored); the runs below are committed in reports/loadtest/
 ```
 
 ## Setup
@@ -23,7 +23,7 @@ python tasks.py loadtest --users 100 --spawn-rate 20 --duration 60s --workers 2
 | Payloads | Real rows sampled from the Telco data (`loadtest/locust_predict.py`; the synthetic CI sample when the CSV is absent) |
 | Mix | `--explain-weight 1`: 4 `/predict` : 1 `/explain` (SHAP); `0`: `/predict` only |
 | Warm-up | 10 `/predict` + 10 `/explain` per worker before measurement |
-| Numbers | From Locust's CSV (`*_stats.csv`, copies in [docs/loadtest/](loadtest/)), latencies in ms |
+| Numbers | From Locust's CSV (`*_stats.csv`, copies in [reports/loadtest/](../reports/loadtest/)), latencies in ms |
 
 ## Results
 

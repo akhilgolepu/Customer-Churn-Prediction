@@ -4,10 +4,10 @@
 # cache: false (DVC records their hashes in dvc.lock without taking them over).
 stages:
   validate_data:
-    cmd: python model/training/validate_data.py
+    cmd: python ml/training/validate_data.py
     deps:
-      - model/training/validate_data.py
-      - model/data_schema.py
+      - ml/training/validate_data.py
+      - ml/data_schema.py
       - data/Telco-Customer-Churn.csv
     params:
       - data
@@ -16,16 +16,16 @@ stages:
           cache: false
 
   train:
-    cmd: python model/training/train.py
+    cmd: python ml/training/train.py
     deps:
-      - model/training/train.py
-      - model/training/common.py
-      - model/calibration.py
-      - model/linear_model.py
-      - model/tracking.py
-      - model/preprocessing/preprocessing.py
-      - model/artifacts/feature_list.json
-      - model/artifacts/cat_columns.json
+      - ml/training/train.py
+      - ml/training/common.py
+      - ml/calibration.py
+      - ml/linear_model.py
+      - ml/tracking.py
+      - ml/preprocessing/preprocessing.py
+      - models/feature_list.json
+      - models/cat_columns.json
       - data/Telco-Customer-Churn.csv
       - reports/data_validation.json
     params:
@@ -35,25 +35,25 @@ stages:
       - calibration
       - output
     outs:
-      - model/artifacts/catboost_churn.cbm:
+      - models/catboost_churn.cbm:
           cache: false
-      - model/artifacts/catboost_churn.calibration.json:
+      - models/catboost_churn.calibration.json:
           cache: false
-      - model/artifacts/logreg_challenger.json:
+      - models/logreg_challenger.json:
           cache: false
-      - model/artifacts/logreg_challenger.calibration.json:
+      - models/logreg_challenger.calibration.json:
           cache: false
-      - model/artifacts/training_metadata.json:
+      - models/training_metadata.json:
           cache: false
 
   evaluate:
-    cmd: python model/training/evaluate.py
+    cmd: python ml/training/evaluate.py
     deps:
-      - model/training/evaluate.py
-      - model/training/common.py
-      - model/artifacts/catboost_churn.cbm
-      - model/artifacts/catboost_churn.calibration.json
-      - model/artifacts/logreg_challenger.json
+      - ml/training/evaluate.py
+      - ml/training/common.py
+      - models/catboost_churn.cbm
+      - models/catboost_churn.calibration.json
+      - models/logreg_challenger.json
       - data/Telco-Customer-Churn.csv
     params:
       - cv
@@ -63,51 +63,51 @@ stages:
       - evaluation
       - slices
     outs:
-      - docs/model_comparison.md:
+      - reports/evaluation/model_comparison.md:
           cache: false
-      - docs/slice_metrics.md:
+      - reports/evaluation/slice_metrics.md:
           cache: false
-      - docs/reliability_diagram.png:
+      - reports/evaluation/reliability_diagram.png:
           cache: false
-      - docs/evaluation.json:
+      - reports/evaluation/evaluation.json:
           cache: false
     metrics:
       - reports/metrics.json:
           cache: false
 
   threshold_analysis:
-    cmd: python model/training/threshold_analysis.py
+    cmd: python ml/training/threshold_analysis.py
     deps:
-      - model/training/threshold_analysis.py
-      - model/artifacts/catboost_churn.cbm
-      - model/artifacts/catboost_churn.calibration.json
+      - ml/training/threshold_analysis.py
+      - models/catboost_churn.cbm
+      - models/catboost_churn.calibration.json
       - data/Telco-Customer-Churn.csv
     params:
       - threshold
       - bootstrap
       - calibration
     outs:
-      - docs/threshold_analysis.json:
+      - reports/evaluation/threshold_analysis.json:
           cache: false
 
   ci_golden:
     # Golden predictions of the shipped model on the synthetic CI sample
-    # (backend/tests/test_ci_sample.py pins them).
-    cmd: python scripts/make_ci_sample.py --golden
+    # (tests/ml/test_ci_sample.py pins them).
+    cmd: python scripts/ci/make_ci_sample.py --golden
     deps:
-      - scripts/make_ci_sample.py
+      - scripts/ci/make_ci_sample.py
       - data/ci_sample.csv
-      - model/artifacts/catboost_churn.cbm
-      - model/artifacts/catboost_churn.calibration.json
+      - models/catboost_churn.cbm
+      - models/catboost_churn.calibration.json
     outs:
       - data/ci_sample_golden.json:
           cache: false
 
   dataset_report:
-    cmd: python model/training/build_dataset_report.py
+    cmd: python ml/training/build_dataset_report.py
     deps:
-      - model/training/build_dataset_report.py
-      - model/training/dataset_registry.py
+      - ml/training/build_dataset_report.py
+      - ml/training/dataset_registry.py
       - data/dataset_catalog.json
       - data/Telco-Customer-Churn.csv
     outs:

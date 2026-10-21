@@ -34,7 +34,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Lint (ruff)
-        run: ruff check backend model scripts loadtest
+        run: ruff check backend ml scripts loadtest tests
 
       - name: Type check (mypy, non-strict)
         run: mypy backend
@@ -42,9 +42,9 @@ jobs:
       - name: Validate the committed CI sample against the training schema
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: python model/training/validate_data.py --data data/ci_sample.csv
+        run: python ml/training/validate_data.py --data data/ci_sample.csv
 
-      # The served model (model/artifacts/catboost_churn.cbm + calibration) and the
+      # The served model (models/catboost_churn.cbm + calibration) and the
       # synthetic CI sample are tracked in git, so the tests run against the real
       # artifact: golden predictions, feature parity, gate, auth, challenger, ...
       - name: Run backend tests with coverage
@@ -53,7 +53,7 @@ jobs:
           DATABASE_BACKEND: sqlite
           MLFLOW_ALLOW_FILE_STORE: "true"
         run: |
-          pytest -q backend/tests --disable-warnings             --cov --cov-report=term --cov-report=xml:coverage.xml --junitxml=pytest.xml
+          pytest -q tests --disable-warnings             --cov --cov-report=term --cov-report=xml:coverage.xml --junitxml=pytest.xml
 
       - name: Coverage summary
         if: always()
@@ -82,7 +82,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          python model/training/build_dataset_report.py
+          python ml/training/build_dataset_report.py
 
   backend-postgres:
     name: Backend Tests on Postgres
@@ -128,7 +128,7 @@ jobs:
           DATABASE_BACKEND: postgres
           POSTGRES_URL: postgresql+psycopg://churn:churn@localhost:5432/churn
           MLFLOW_ALLOW_FILE_STORE: "true"
-        run: pytest -q backend/tests --disable-warnings
+        run: pytest -q tests --disable-warnings
 
   container:
     name: API Image Build, Smoke Test and Scan

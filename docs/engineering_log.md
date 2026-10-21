@@ -88,7 +88,7 @@ Packaging and runtime
     or `isinstance` check on one copy would miss the other. Found by mypy, which also flagged ORM
     timestamp columns typed as `str`.
 14. **The retraining job wrote into the repository** (`catboost_info/` in the working directory, models
-    and bundles under `model/artifacts/`). `RETRAINING_OUTPUT_DIR` redirects them; CatBoost no longer
+    and bundles under `models/`). `RETRAINING_OUTPUT_DIR` redirects them; CatBoost no longer
     writes training logs.
 
 Test and tooling hygiene
@@ -107,8 +107,8 @@ Test and tooling hygiene
    F1 (it depends on a threshold that is not stated). It now shows the measured test ROC-AUC (0.846).
    [`test_dashboard_states_the_measured_test_auc`]
 2. **The README quoted "2.97% decision disagreement in the load test"**, which no committed output
-   backs. Replaced with the offline 3.4% from `docs/evaluation.json` and the live metric's name; the
-   load-test CSVs behind the throughput numbers are now committed in `docs/loadtest/`.
+   backs. Replaced with the offline 3.4% from `reports/evaluation/evaluation.json` and the live metric's name; the
+   load-test CSVs behind the throughput numbers are now committed in `reports/loadtest/`.
    [`test_load_numbers_match_the_committed_locust_csvs`]
 3. **`dvc.lock` was stale on `main`**: Tier 3 edited pipeline dependencies (`common.py`,
    `dataset_registry.py`, the dataset catalog) without re-running DVC, so `dvc status` reported every

@@ -23,7 +23,7 @@ services:
       CANARY_ROLLBACK_COOLDOWN_SECONDS: ${CANARY_ROLLBACK_COOLDOWN_SECONDS:-600}
     volumes:
       - ./backend/data:/app/backend/data
-      - ./model/artifacts:/app/model/artifacts
+      - ./models:/app/models
       - ./data:/app/data:ro
     ports:
       - "8000:8000"

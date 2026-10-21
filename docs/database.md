@@ -4,7 +4,7 @@
 
 - Active model id: 87b88c59-4e6c-4554-a274-fdfb9685f54e (v1)
 - Shadow model id: dd1dfda5-ae41-472e-b396-e10d3d3ba752 (v2-shadow)
-- Shadow artifact URI: model/artifacts/catboost_churn.cbm
+- Shadow artifact URI: models/catboost_churn.cbm
 - Active and shadow currently resolve to the same artifact file on disk.
 
 ## Recommended Runtime Stack

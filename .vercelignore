@@ -1,5 +1,8 @@
 backend/
-model/
+ml/
+models/
+tests/
+reports/
 data/
 .github/
 docs/

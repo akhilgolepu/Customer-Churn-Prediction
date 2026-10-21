@@ -12,7 +12,7 @@ target-version = "py313"
 extend-exclude = ["notebooks", "frontend"]
 
 [tool.pytest.ini_options]
-testpaths = ["backend/tests"]
+testpaths = ["tests"]
 
 [tool.mypy]
 # Non-strict type checking for the API (CI: `mypy backend`).
@@ -23,7 +23,7 @@ mypy_path = "backend"
 exclude = "(^|/)(tests|__pycache__)/"
 
 [tool.coverage.run]
-source = ["backend", "model"]
+source = ["backend", "ml"]
 omit = ["*/tests/*", "*/__pycache__/*", "backend/db/alembic/*"]
 
 [tool.coverage.report]

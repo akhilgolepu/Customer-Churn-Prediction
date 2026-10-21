@@ -15,8 +15,8 @@ import pandas as pd
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 
-from model.preprocessing.pipeline_bundle import build_pipeline_bundle
-from model.preprocessing.preprocessing import (
+from ml.preprocessing.pipeline_bundle import build_pipeline_bundle
+from ml.preprocessing.preprocessing import (
     load_artifacts,
     preprocess,
     prepare_for_model,
@@ -43,7 +43,7 @@ class RetrainingOrchestrator:
 
     def __init__(self, model_registry_service=None, config: RetrainingConfig | None = None) -> None:
         repo_root = Path(__file__).resolve().parents[2]
-        artifacts_dir = repo_root / "model" / "artifacts"
+        artifacts_dir = repo_root / "models"
         # RETRAINING_OUTPUT_DIR redirects retrained models and bundles (demos/tests
         # use a temp dir instead of writing into the repository).
         output_dir = Path(os.environ["RETRAINING_OUTPUT_DIR"]) if os.environ.get("RETRAINING_OUTPUT_DIR") else artifacts_dir

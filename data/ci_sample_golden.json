@@ -1,6 +1,6 @@
 {
- "model": "model/artifacts/catboost_churn.cbm",
- "note": "Calibrated P(churn) of the shipped model per row of data/ci_sample.csv. Regenerate with `python scripts/make_ci_sample.py --golden` after retraining.",
+ "model": "models/catboost_churn.cbm",
+ "note": "Calibrated P(churn) of the shipped model per row of data/ci_sample.csv. Regenerate with `python scripts/ci/make_ci_sample.py --golden` after retraining.",
  "probabilities": [
   0.3545064974,
   0.4019605316,

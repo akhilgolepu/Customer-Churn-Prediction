@@ -10,9 +10,9 @@ the historical 80/20 test split. Model: CatBoost (depth 4, learning rate 0.03, L
 299 trees chosen by early stopping on validation). All settings live in `params.yaml`.
 
 ```bash
-python model/training/train.py              # fit on train, early-stop + calibrate on validation
-python model/training/evaluate.py           # CV comparison, test once, reliability, slices (~4 min)
-python model/training/threshold_analysis.py # cost-based threshold on calibrated validation scores
+python ml/training/train.py              # fit on train, early-stop + calibrate on validation
+python ml/training/evaluate.py           # CV comparison, test once, reliability, slices (~4 min)
+python ml/training/threshold_analysis.py # cost-based threshold on calibrated validation scores
 ```
 
 Cross-validation on train+validation (5 stratified folds, 5,634 rows), mean with 95% interval:
@@ -27,7 +27,7 @@ Cross-validation on train+validation (5 stratified folds, 5,634 rows), mean with
 
 Held-out test split, scored once (1,409 rows): shipped artifact ROC-AUC 0.8464, PR-AUC 0.6655,
 Brier 0.1350, log loss 0.4138; logistic regression refit on train+validation 0.8449 / 0.6492 / 0.1365 /
-0.4165. Full tables, including the paired bootstraps: [docs/model_comparison.md](model_comparison.md).
+0.4165. Full tables, including the paired bootstraps: [reports/evaluation/model_comparison.md](../reports/evaluation/model_comparison.md).
 
 What this does and does not say:
 
@@ -41,16 +41,16 @@ What this does and does not say:
   was dropped. Calibration was then chosen on validation by 5-fold cross-fitting (lowest log loss among
   identity, Platt and isotonic): identity 0.4218, Platt 0.4222, isotonic 0.4704. The unweighted model
   needed no correction (Platt fit a = 0.980, b = 0.014), so the shipped calibration file is the
-  identity. Test ECE 0.018 ([diagram](reliability_diagram.png)).
+  identity. Test ECE 0.018 ([diagram](../reports/evaluation/reliability_diagram.png)).
 - **No test-set tuning.** The previous model was early-stopped on the same rows it was evaluated on;
-  that is fixed. The test fingerprint is recorded in `model/artifacts/training_metadata.json`.
+  that is fixed. The test fingerprint is recorded in `models/training_metadata.json`.
 - **One public, widely used dataset.** Nothing here is validated against real retention outcomes. See
   the [model card](model_card.md) for intended use, slices and limitations.
 
 ## Decision threshold
 
 `POST /predict` uses `DECISION_THRESHOLD` (default **0.38**) when the request does not pass
-`?threshold=`. The value comes from `model/training/threshold_analysis.py`, which:
+`?threshold=`. The value comes from `ml/training/threshold_analysis.py`, which:
 
 1. scores the validation split and calibrates it out of fold (each row by a calibrator that did not see it),
 2. picks the grid threshold with the highest expected net benefit on those scores (the test split is
@@ -119,11 +119,11 @@ low/medium/high risk tiers use fixed cut-offs (0.33 / 0.66) and are independent 
 
 Because the two models tie, the simpler one is not thrown away: `train.py` also trains logistic
 regression on the same split (calibration chosen the same way; identity won again) and exports it as
-JSON (`model/artifacts/logreg_challenger.json`: coefficients, imputation medians, scaling and one-hot
+JSON (`models/logreg_challenger.json`: coefficients, imputation medians, scaling and one-hot
 weights, scored with numpy, no pickles). At startup the API attaches it to the shadow slot whenever no
 other candidate is being tested (`CHALLENGER_ENABLED=true`, default), so every `/predict` also returns
 the challenger's `shadowProbability` and `GET /api/v1/system/canary` counts how often the two disagree
-on live traffic. Shipped artifacts on the test split (`python model/training/evaluate.py`):
+on live traffic. Shipped artifacts on the test split (`python ml/training/evaluate.py`):
 
 | | ROC-AUC | PR-AUC | Brier | Log loss |
 |---|---:|---:|---:|---:|

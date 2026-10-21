@@ -5,7 +5,7 @@ security notes. Local and Docker runs are in [mlops.md](mlops.md#running-locally
 
 ## Deployment
 
-The backend reads the model from `model/` (outside `backend/`), so it must be built from the
+The backend imports `ml/` and serves `models/` (both outside `backend/`), so it must be built from the
 **repository root**. Setting Render's "Root Directory" to `backend/` (as earlier drafts of this
 README said) leaves the model out of the build and the service fails to start.
 
@@ -25,7 +25,7 @@ README said) leaves the model out of the build and the service fails to start.
    password.
 3. **Verify end to end** (stdlib only, no installs):
    ```bash
-   python scripts/verify_deployment.py https://<your-api>.onrender.com --origin https://<your-app>.vercel.app --password <viewer demo password>
+   python scripts/deploy/verify_deployment.py https://<your-api>.onrender.com --origin https://<your-app>.vercel.app --password <viewer demo password>
    ```
    It retries the health check for up to 3 minutes while a sleeping free instance wakes (`--wake`),
    then checks readiness, CORS preflight for your frontend origin, login, predict, explain and an

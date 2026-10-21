@@ -10,7 +10,7 @@ end to end.
 
 **Try it:** [live app](https://customer-churn-prediction-alpha-one.vercel.app) ·
 [API docs](https://customer-churn-prediction-4pvg.onrender.com/docs) ·
-[end-to-end demo transcript](docs/demo_all.md)
+[end-to-end demo transcript](reports/demos/demo_all.md)
 
 Sign in as **Analyst** (password `demo-analyst789`) or **Viewer** (`demo-viewer789`); these demo
 logins are public by design. The API runs on a free Render instance that sleeps when idle, so the
@@ -36,10 +36,10 @@ first request can take about a minute.
 All numbers are measured on the IBM Telco data (7,043 customers; stratified 60/20/20 split, seed 42)
 unless stated. Early stopping, calibration and the threshold are chosen on the validation split; the
 test split is scored once. Each figure links to the file that produced it, and
-[a test](backend/tests/test_readme_claims.py) fails if this page drifts from those files.
+[a test](tests/repo/test_readme_claims.py) fails if this page drifts from those files.
 
 **Model comparison, 5-fold CV on train+validation (mean [95% t-interval])**
-([docs/model_comparison.md](docs/model_comparison.md), `python model/training/evaluate.py`)
+([reports/evaluation/model_comparison.md](reports/evaluation/model_comparison.md), `python ml/training/evaluate.py`)
 
 | Model | ROC-AUC | Brier |
 |---|---|---|
@@ -52,20 +52,20 @@ On Telco, CatBoost **does not beat** logistic regression. The served model score
 0.846 (95% CI 0.824 to 0.868) with calibration error ECE 0.018; the logistic regression runs beside
 it as a standing challenger ([ADR 0001](docs/decisions/0001-catboost-active-logreg-challenger.md)).
 
-**Second dataset: where the tree model wins** ([docs/second_dataset.md](docs/second_dataset.md),
-`python model/training/second_dataset.py`). On a 10,000-customer bank churn dataset (OpenML 46911)
+**Second dataset: where the tree model wins** ([reports/experiments/second_dataset.md](reports/experiments/second_dataset.md),
+`python ml/training/second_dataset.py`). On a 10,000-customer bank churn dataset (OpenML 46911)
 CatBoost beats logistic regression by +0.109 (95% CI +0.099 to +0.120) in CV ROC-AUC. Adding two
 non-linear terms (a spline on age, one-hot product count) to the logistic regression cuts the gap to
 +0.0225, so most of the advantage is two non-linearities the linear model misses.
 
-**Decision threshold** ([docs/threshold_analysis.json](docs/threshold_analysis.json),
-[ADR 0004](docs/decisions/0004-cost-based-threshold.md), `python model/training/threshold_analysis.py`).
+**Decision threshold** ([reports/evaluation/threshold_analysis.json](reports/evaluation/threshold_analysis.json),
+[ADR 0004](docs/decisions/0004-cost-based-threshold.md), `python ml/training/threshold_analysis.py`).
 Assumed: a $50 retention offer, a 30% save rate, and a saved customer worth 12 months x $74.86 mean
 monthly charge x 50% margin = $449.16. The threshold chosen on validation is 0.38; the closed-form
 break-even is 0.371. On test it gains +$716 per 1,000 customers over 0.50, with a 95% CI of
 -$421 to +$1,888: **not statistically significant**.
 
-**Load** ([docs/loadtest_results.md](docs/loadtest_results.md), raw CSVs in [docs/loadtest/](docs/loadtest/),
+**Load** ([docs/loadtest_results.md](docs/loadtest_results.md), raw CSVs in [reports/loadtest/](reports/loadtest/),
 `python tasks.py loadtest --users 100 --workers 2`). Locust on the same desktop (Intel i5-14400F,
 16 logical CPUs), 4 `/predict` : 1 `/explain`, every request scored by both models. About 290 req/s with 2 workers, 178 with 1 at
 100 users; p95 18 to 25 ms at 20 users. Not measured on the deployed host.
@@ -77,7 +77,7 @@ flowchart LR
     subgraph Offline["Offline: dvc repro"]
         CSV[(Telco CSV)] --> V[validate<br/>pandera] --> T[train + calibrate<br/>CatBoost, LR challenger]
         T --> E[evaluate + threshold]
-        T --> ART[(model/artifacts)]
+        T --> ART[(models/)]
         T --> ML[(MLflow registry)]
     end
     subgraph API["FastAPI on Render (Docker)"]
@@ -103,11 +103,11 @@ behind each choice: [docs/decisions/](docs/decisions/).
 
 | Component | Status | Evidence |
 |---|---|---|
-| Live deployment (Render + Vercel) | Verified | `scripts/verify_deployment.py`: 7/7 checks as analyst and viewer on 2026-10-20 |
+| Live deployment (Render + Vercel) | Verified | `scripts/deploy/verify_deployment.py`: 7/7 checks as analyst and viewer on 2026-10-20 |
 | Test suite, SQLite | Verified | 200 tests locally (199 + 1 skipped in CI, which has no dataset); CI job "Backend Checks" ([docs/mlops.md](docs/mlops.md#ci)) |
 | Test suite, Postgres 16 | Verified | Same suite, CI job "Backend Tests on Postgres" and locally against the compose Postgres |
-| Golden predictions of the served model | Verified | 500-row synthetic sample pinned to 1e-6 (`backend/tests/test_ci_sample.py`) |
-| Promotion gate, canary rollback, drift alert | Verified | `python tasks.py demo`, [transcript](docs/demo_all.md) |
+| Golden predictions of the served model | Verified | 500-row synthetic sample pinned to 1e-6 (`tests/ml/test_ci_sample.py`) |
+| Promotion gate, canary rollback, drift alert | Verified | `python tasks.py demo`, [transcript](reports/demos/demo_all.md) |
 | Training pipeline | Verified | `dvc repro` reproduces the model and evaluation outputs ([docs/mlops.md](docs/mlops.md#reproducible-pipeline-dvc--mlflow)) |
 | API and frontend containers | Verified locally | `docker compose up --build`; see [docs/mlops.md](docs/mlops.md#running-locally) |
 | Prometheus + Grafana | Verified locally | [screenshots](docs/mlops.md#observability-prometheus--grafana) |
@@ -159,15 +159,17 @@ found while hardening the project: [docs/engineering_log.md](docs/engineering_lo
 ## Repository map
 
 ```
-backend/          FastAPI service: routers, services (registry, canary, gate, drift), repositories, tests
-model/            training pipeline (model/training/), calibration, preprocessing, shipped artifacts
-frontend/         React + TypeScript dashboard (Vite, deployed on Vercel)
-data/             dataset catalog, synthetic CI sample + golden predictions (Telco CSV via DVC)
-docs/             results, architecture, decisions (ADRs), model card, demos, engineering log
-scripts/          end-to-end demos, CI sample builder, deployment check
-loadtest/         Locust scenario      observability/   Prometheus + Grafana provisioning
-notebooks/        exploratory notebook reports/         DVC metrics and data-validation report
-dvc.yaml, params.yaml   pipeline and its settings      tasks.py, Makefile   task runner
+backend/        FastAPI service: routers, services (registry, canary, gate, drift), repositories, migrations
+frontend/       React + TypeScript dashboard (Vite, deployed on Vercel)
+ml/             ML code: training pipeline (ml/training/), preprocessing, calibration, data schema
+models/         trained artifacts served by the API (CatBoost, LR challenger, calibration, metadata)
+data/           dataset catalog, synthetic CI sample + golden predictions (Telco CSV via DVC)
+reports/        generated outputs: evaluation/, experiments/, demos/, loadtest/, DVC metrics
+docs/           hand-written: architecture, decisions (ADRs), model card, results, runbooks
+tests/          api/, ml/, repo/ (docs links, README claims, requirements)
+scripts/        demos/, ci/ (golden sample), deploy/ (deployment check)
+loadtest/       Locust scenario         observability/   Prometheus + Grafana provisioning
+notebooks/      exploratory notebook    dvc.yaml, params.yaml   pipeline and its settings
 ```
 
 ## Licence

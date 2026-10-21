@@ -33,20 +33,20 @@ register (candidate) -> shadow (scored on every request, canary % served to user
   `model/calibration.json` inside a pipeline bundle, covered by the bundle's SHA-256 manifest).
   Artifacts without one serve their raw score.
 
-The demo (`scripts/demo_shadow_rollback.py`, transcript in
-[`docs/demo_shadow_rollback.md`](demo_shadow_rollback.md)) drives the real HTTP routes with
+The demo (`scripts/demos/demo_shadow_rollback.py`, transcript in
+[`reports/demos/demo_shadow_rollback.md`](../reports/demos/demo_shadow_rollback.md)) drives the real HTTP routes with
 replayed held-out customer rows: a routine retrain (v2, test AUC 0.847) shadows at 2.2% disagreement
 (9 of 400) and passes the gate; a degraded retrain (v3, trained on permuted labels) is refused by the
 gate with a 409, then put in shadow and rolled back automatically after 60 compared requests at 33.3%
 disagreement, with v2 still serving.
 
 ```bash
-python model/training/build_demo_candidates.py   # writes model/artifacts/demo/ (git-ignored)
-python scripts/demo_shadow_rollback.py --out docs/demo_shadow_rollback.md
+python ml/training/build_demo_candidates.py   # writes models/demo/ (git-ignored)
+python scripts/demos/demo_shadow_rollback.py --out reports/demos/demo_shadow_rollback.md
 ```
 
 The degraded candidate's test AUC is 0.642, not 0.5. This was checked, not assumed
-([docs/permutation_check.md](permutation_check.md), `python model/training/permutation_check.py`):
+([reports/experiments/permutation_check.md](../reports/experiments/permutation_check.md), `python ml/training/permutation_check.py`):
 across 20 models trained on independently permuted labels, AUC against the true test labels averaged
 0.529 with SD 0.125 (range 0.241 to 0.735), while the same scores re-assigned to random rows give SD
 0.021 (theory: 0.017). Each permuted model's AUC tracks the correlation of its scores with the real
@@ -72,12 +72,12 @@ the headline test metrics (`dvc metrics show`).
 
 | Stage | Command | Outputs |
 |---|---|---|
-| `validate_data` | `model/training/validate_data.py` | `reports/data_validation.json` (fails the pipeline on bad data) |
-| `train` | `model/training/train.py` | CatBoost + calibration, logistic-regression challenger, `training_metadata.json`; logs the run to MLflow and registers both models |
-| `evaluate` | `model/training/evaluate.py` | model comparison, slices, reliability diagram, `reports/metrics.json`; logs test metrics to MLflow, linked to the training run |
-| `threshold_analysis` | `model/training/threshold_analysis.py` | `docs/threshold_analysis.json` |
-| `ci_golden` | `scripts/make_ci_sample.py --golden` | golden predictions for the CI sample |
-| `dataset_report` | `model/training/build_dataset_report.py` | `data/dataset_report.md` |
+| `validate_data` | `ml/training/validate_data.py` | `reports/data_validation.json` (fails the pipeline on bad data) |
+| `train` | `ml/training/train.py` | CatBoost + calibration, logistic-regression challenger, `training_metadata.json`; logs the run to MLflow and registers both models |
+| `evaluate` | `ml/training/evaluate.py` | model comparison, slices, reliability diagram, `reports/metrics.json`; logs test metrics to MLflow, linked to the training run |
+| `threshold_analysis` | `ml/training/threshold_analysis.py` | `reports/evaluation/threshold_analysis.json` |
+| `ci_golden` | `scripts/ci/make_ci_sample.py --golden` | golden predictions for the CI sample |
+| `dataset_report` | `ml/training/build_dataset_report.py` | `data/dataset_report.md` |
 
 `dvc repro -f` (all stages forced) ran end to end in 5 min 10 s (`dvc repro -f`, all stages forced; a later `dvc repro` that re-ran the five
 changed stages took 7 min 16 s) on this machine and reproduced every
@@ -98,7 +98,7 @@ at `data/Telco-Customer-Churn.csv` yourself.
 
 ### Data validation (pandera)
 
-`model/data_schema.py` holds one rule table rendered two ways:
+`ml/data_schema.py` holds one rule table rendered two ways:
 
 - **pandera schemas** for the training data (`TRAINING_SCHEMA`: value domains, unique `customerID`,
   `Churn` label, blank `TotalCharges` only at tenure 0, sanity ranges, no unexpected columns; used by
@@ -111,7 +111,7 @@ at `data/Telco-Customer-Churn.csv` yourself.
   7,043 rows), too much for a request whose p95 is in the tens of milliseconds, hence the plain-Python
   rendering; a test checks both agree on all 8,748 service combinations.
 
-The full dataset passes the training schema. Malformed-row tests: `backend/tests/test_data_validation.py`.
+The full dataset passes the training schema. Malformed-row tests: `tests/ml/test_data_validation.py`.
 
 ### CI
 
@@ -130,7 +130,7 @@ checks; none rewrite files).
 
 **CI runs the real model.** The served artifact is in git, and `data/ci_sample.csv` is a committed
 500-row sample, so the tests that used to skip without the DVC dataset now run. The sample is
-**synthetic** (`scripts/make_ci_sample.py`, fixed seed): the IBM Telco CSV has no clear data license
+**synthetic** (`scripts/ci/make_ci_sample.py`, fixed seed): the IBM Telco CSV has no clear data license
 (IBM's repository license covers its code), so real rows are not committed. Category shares are
 rounded aggregate constants, the consistency rules hold, and `Churn` is drawn from the shipped model's
 own probabilities, so the sample says nothing about real accuracy. Its job is
@@ -142,7 +142,7 @@ in requests) score identically: no skew.
 
 ### Drift: live monitor, Evidently, retraining trigger
 
-`python scripts/demo_drift.py --out docs/demo_drift.md` ([transcript](demo_drift.md)) replays 300
+`python scripts/demos/demo_drift.py --out reports/demos/demo_drift.md` ([transcript](../reports/demos/demo_drift.md)) replays 300
 held-out rows, then 300 rows with tenure x 0.3 and MonthlyCharges x 1.3 (TotalCharges recomputed):
 
 | Signal (live monitor) | Baseline half | Shifted half | Relative change | Alert |
@@ -188,13 +188,13 @@ Screenshots from this machine (Docker Desktop, canary at 20% for the demo):
   CatBoost-vs-challenger disagreement 2.97% (3.4% offline on the test split).
 - [right after the rollback demo](img/grafana_rollback.png): v2 active (Platt-calibrated), the
   degraded v3's disagreement at 33.3% over 60 compared requests, one rollback, the gate's 409 in the
-  error panel. Transcript: [docs/demo_shadow_rollback_live.md](demo_shadow_rollback_live.md).
+  error panel. Transcript: [reports/demos/demo_shadow_rollback_live.md](../reports/demos/demo_shadow_rollback_live.md).
 
 ### Postgres
 
 `DATABASE_BACKEND=postgres` now works and is tested: the whole suite passes on SQLite and on Postgres 16
 (the full suite, also in CI), the rollback demo passes against the API container on Postgres
-([transcript](demo_shadow_rollback_postgres.md)), and predictions, audit events, the registry and
+([transcript](../reports/demos/demo_shadow_rollback_postgres.md)), and predictions, audit events, the registry and
 batch jobs are persisted (checked in the tables; after a container restart the API still serves the
 promoted v2). Getting there meant fixing six defects in a path that had never been run (see the
 [engineering log](engineering_log.md)). Run it with `DATABASE_BACKEND=postgres docker compose --profile postgres up --build`.
@@ -224,7 +224,7 @@ not committed, no DVC remote).
 
 **Dependencies: one file.** `requirements.txt` pins every direct dependency (API, training, MLOps,
 tests, lint, load test) and is what the API image, CI and `tasks.py setup` install;
-`backend/tests/test_requirements.py` fails if the code imports a package it does not declare or a pin
+`tests/repo/test_requirements.py` fails if the code imports a package it does not declare or a pin
 is loose. Transitive dependencies are resolved by pip at install time. The trade-off, measured on
 2026-10-20: the API image grew from 2.08 GB (runtime-only file) to 3.22 GB, while the running API's
 memory after a predict and an explain stayed the same (239 MiB vs 247 MiB in `docker stats`), because
@@ -258,7 +258,7 @@ something else on `localhost`, open the frontend at `http://127.0.0.1:5173` and 
 docker compose --profile postgres up -d postgres
 $env:DATABASE_BACKEND = "postgres"
 $env:POSTGRES_URL = "postgresql+psycopg://churn:churn@127.0.0.1:5432/churn"
-pytest -q backend/tests                                      # the suite against Postgres
+pytest -q tests                                              # the suite against Postgres
 $env:DATABASE_BACKEND = "postgres"; docker compose --profile postgres up -d --build backend   # the API container on Postgres
 ```
 
@@ -278,10 +278,10 @@ $env:DATABASE_BACKEND = "postgres"; docker compose --profile postgres up -d --bu
 - **Frontend** `frontend/`: React + TypeScript + Vite, Tailwind, Recharts.
 - **Backend** `backend/`: FastAPI. Routers in `routers/api_v1`, services in `services/`, repositories
   in `repositories/`, request/response schemas in `schemas/`.
-- **Training** `model/training/`: `common.py` (data, split, model recipes, metrics), `train.py`,
-  `evaluate.py`, `threshold_analysis.py`, all driven by `params.yaml`. `model/calibration.py` fits
+- **Training** `ml/training/`: `common.py` (data, split, model recipes, metrics), `train.py`,
+  `evaluate.py`, `threshold_analysis.py`, all driven by `params.yaml`. `ml/calibration.py` fits
   calibrators with scikit-learn and applies them with numpy only (JSON, no pickles).
-- **Shared feature contract** `model/preprocessing/preprocessing.py` (training) and
+- **Shared feature contract** `ml/preprocessing/preprocessing.py` (training) and
   `backend/feature_engineering.py` (serving). The two must stay identical; a past mismatch in
   `TotalServices` and `TechIssueRisk` skewed live predictions. `test_feature_parity.py` runs ~1,000
   synthetic customers (every tenure-bucket boundary, internet/phone/contract/payment combinations)

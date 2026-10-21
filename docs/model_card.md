@@ -4,9 +4,9 @@ Every number below comes from a script in this repository; the command is given
 next to it. Regenerate with:
 
 ```bash
-python model/training/train.py              # model + calibration + model/artifacts/training_metadata.json
-python model/training/evaluate.py           # docs/model_comparison.md, docs/slice_metrics.md, docs/reliability_diagram.png, docs/evaluation.json
-python model/training/threshold_analysis.py # docs/threshold_analysis.json
+python ml/training/train.py              # model + calibration + models/training_metadata.json
+python ml/training/evaluate.py           # reports/evaluation/model_comparison.md, reports/evaluation/slice_metrics.md, reports/evaluation/reliability_diagram.png, reports/evaluation/evaluation.json
+python ml/training/threshold_analysis.py # reports/evaluation/threshold_analysis.json
 ```
 
 ## Intended use
@@ -38,7 +38,7 @@ python model/training/threshold_analysis.py # docs/threshold_analysis.json
 | Trees | 299 (early stopping on the validation split chose iteration 298) |
 | Class weighting | **None.** The previous recipe used a balanced weight (2.77); it did not improve ranking and made the scores run high (see "Why the class weight was dropped") |
 | Calibration | **Identity** (raw CatBoost probability served unchanged), chosen by rule, see below |
-| Features | 25: tenure, charges, services, contract, payment method plus 7 engineered features (`model/artifacts/feature_list.json`). `gender` and `customerID` are excluded. `SeniorCitizen` is a model input |
+| Features | 25: tenure, charges, services, contract, payment method plus 7 engineered features (`models/feature_list.json`). `gender` and `customerID` are excluded. `SeniorCitizen` is a model input |
 | Explanations | SHAP TreeExplainer on the raw model (log-odds space). Calibration is monotone, so it does not change which drivers rank highest |
 
 ## Data
@@ -61,7 +61,7 @@ python model/training/threshold_analysis.py # docs/threshold_analysis.json
 | Expected calibration error (10 bins) | 0.018 |
 | At threshold 0.38: flagged / precision / recall | 31.4% / 0.580 / 0.687 |
 
-Comparison with alternatives (full tables in [model_comparison.md](model_comparison.md)):
+Comparison with alternatives (full tables in [model_comparison.md](../reports/evaluation/model_comparison.md)):
 
 - **Logistic regression is as good.** 5-fold CV ROC-AUC 0.8484 for logistic
   regression vs 0.8476 for CatBoost; the paired bootstrap difference on pooled
@@ -84,7 +84,7 @@ Comparison with alternatives (full tables in [model_comparison.md](model_compari
   logloss objective already produces calibrated probabilities. For reference,
   Platt fitted on all of validation is a = 0.980, b = 0.014 (a = 1, b = 0 would be
   a no-op).
-- Reliability on test: [reliability_diagram.png](reliability_diagram.png).
+- Reliability on test: [reliability_diagram.png](../reports/evaluation/reliability_diagram.png).
   ECE: shipped model 0.018, logistic regression 0.017, CatBoost with the old
   balanced class weight 0.146.
 - The serving path applies whatever calibration file sits next to the model
@@ -101,7 +101,7 @@ reason to distort the probabilities, so the weight was removed.
 
 ## Slices (test split, threshold 0.38)
 
-Full table: [slice_metrics.md](slice_metrics.md). Reading it:
+Full table: [slice_metrics.md](../reports/evaluation/slice_metrics.md). Reading it:
 
 - **Calibration holds in every slice.** Mean predicted vs observed churn rate is
   within 0.045 for all 13 slice values (largest: tenure 6-12, +0.045).

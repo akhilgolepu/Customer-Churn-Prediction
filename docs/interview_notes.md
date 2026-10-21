@@ -1,7 +1,7 @@
 # Interview notes
 
 Short, honest answers to the questions this project invites, and resume bullets that use only
-measured numbers. Every number links back to the command that produced it; `backend/tests/test_readme_claims.py`
+measured numbers. Every number links back to the command that produced it; `tests/repo/test_readme_claims.py`
 checks them against the generated outputs.
 
 ## Resume bullets (each with the command that produced it)
@@ -10,19 +10,19 @@ checks them against the generated outputs.
   CatBoost ties logistic regression (CV ROC-AUC difference -0.0008, 95% CI -0.0034 to +0.0018); on
   a 10,000-customer bank dataset it wins by +0.109 (95% CI +0.099 to +0.120), and adding two
   non-linear features to the logistic regression cuts that to +0.0225, about four-fifths of the gap.
-  `python model/training/evaluate.py` · `python model/training/second_dataset.py`
+  `python ml/training/evaluate.py` · `python ml/training/second_dataset.py`
 - **Served calibrated probabilities with a cost-based decision rule.** Dropping a class weight took
   test calibration error (ECE) from 0.146 to 0.018; the threshold (0.38) is chosen on validation
   data from stated economics and matches the closed-form break-even (0.371).
-  `python model/training/evaluate.py` · `python model/training/threshold_analysis.py`
+  `python ml/training/evaluate.py` · `python ml/training/threshold_analysis.py`
 - **Built a model lifecycle that refuses bad models automatically.** A candidate trained on
   shuffled labels is blocked by the promotion gate (HTTP 409) and, once shadowed, rolled back by the
   canary after 60 requests at 33.3% disagreement, while a healthy retrain (2.2%) is promoted.
-  `python scripts/demo_all.py`
+  `python scripts/demos/demo_all.py`
 - **Made an untested Postgres mode work and kept it working.** Six defects fixed (one made every
   prediction fail after March 2026); the full suite (200 tests) runs on SQLite and Postgres in CI, and golden
   predictions on a committed 500-row sample pin the real model's output to 1e-6.
-  `pytest backend/tests` (and with `DATABASE_BACKEND=postgres`)
+  `pytest tests` (and with `DATABASE_BACKEND=postgres`)
 - **Measured capacity instead of quoting a load generator's ceiling.** About 290 req/s with 2
   uvicorn workers vs 178 with 1 at saturation, p95 18 ms at 20 users; Prometheus metrics and a
   provisioned Grafana dashboard.
@@ -61,7 +61,7 @@ arrive later are the real signal, and campaign results against a holdout are the
 **Why is the degraded demo model's AUC 0.64 and not 0.5?** A model trained on shuffled labels is
 still a function of predictive features, so it can correlate with churn by accident. Twenty
 permuted-label models averaged 0.529 with SD 0.125, against SD 0.021 for label-independent scores.
-[docs/permutation_check.md](permutation_check.md)
+[reports/experiments/permutation_check.md](../reports/experiments/permutation_check.md)
 
 **Why is the CI data synthetic?** The Telco CSV has no clear licence, so real rows are not
 committed. The 500-row sample keeps the consistency rules and gets labels from the model itself; it

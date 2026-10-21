@@ -19,7 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ /app/backend/
 
 # ─── INCLUDE RUNTIME ML UTILITIES ────────────────────────
-COPY model/ /app/model/
+COPY ml/ /app/ml/
+
+# Trained artifacts (versioned in git, produced by `dvc repro`)
+COPY models/ /app/models/
 
 EXPOSE 8000
 

@@ -14,7 +14,7 @@ repos:
     rev: v0.15.21
     hooks:
       - id: ruff-check
-        files: ^(backend|model|scripts)/
+        files: ^(backend|ml|scripts|tests)/
   - repo: local
     hooks:
       - id: mypy-backend

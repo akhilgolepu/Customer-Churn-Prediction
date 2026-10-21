@@ -38,7 +38,7 @@ jobs:
 
       - name: Static security scan (Bandit)
         run: |
-          bandit -r backend -x backend/tests,backend/__pycache__
+          bandit -r backend ml -x backend/__pycache__
 
   node-security:
     name: Node Security Checks
