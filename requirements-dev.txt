@@ -1,6 +1,0 @@
-# CI / developer tooling on top of requirements.txt (the full pinned environment).
-# Only tools that requirements.txt does not already pin (ruff is pinned there).
-mypy==2.4.0
-pytest-cov==7.1.0
-coverage==7.16.2
-pre-commit==4.7.0

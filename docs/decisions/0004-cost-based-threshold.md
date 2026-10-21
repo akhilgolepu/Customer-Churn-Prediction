@@ -14,7 +14,7 @@ scores inflated by a class weight.
 `DECISION_THRESHOLD` (default **0.38**) maximises expected net benefit under a stated cost
 model: contacting costs an offer cost ($50), a contacted churner is saved with probability
 save rate (30%), and a saved customer is worth 12 months of margin ($449.16). It is chosen
-on cross-fitted calibrated **validation** scores (`model/training/threshold_analysis.py`);
+on cross-fitted calibrated **validation** scores (`ml/training/threshold_analysis.py`);
 the test split only reports it. The closed-form break-even threshold
 `offer_cost / (save_rate x value)` = 0.371 is reported next to it.
 

@@ -1,5 +1,5 @@
 # Single source of truth for the training / evaluation / threshold scripts in
-# model/training/. Nothing in here was tuned on the held-out test split.
+# ml/training/. Nothing in here was tuned on the held-out test split.
 
 data:
   path: data/Telco-Customer-Churn.csv
@@ -90,9 +90,9 @@ slices:
   max_recall_gap: 0.15
 
 output:
-  model_path: model/artifacts/catboost_churn.cbm
-  calibration_path: model/artifacts/catboost_churn.calibration.json
+  model_path: models/catboost_churn.cbm
+  calibration_path: models/catboost_churn.calibration.json
   # Logistic-regression challenger served in the shadow slot (CHALLENGER_ENABLED).
-  challenger_path: model/artifacts/logreg_challenger.json
-  training_metadata_path: model/artifacts/training_metadata.json
-  metrics_path: metrics.json
+  challenger_path: models/logreg_challenger.json
+  training_metadata_path: models/training_metadata.json
+  metrics_path: reports/metrics.json

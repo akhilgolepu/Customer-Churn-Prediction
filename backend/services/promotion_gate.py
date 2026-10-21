@@ -34,7 +34,7 @@ def _default_scorer(artifact_path: str) -> Callable[[pd.DataFrame], np.ndarray]:
 
 
 def load_labelled_frame(path: Path) -> tuple[pd.DataFrame, np.ndarray]:
-    from model.preprocessing.preprocessing import load_artifacts, prepare_for_model, preprocess
+    from ml.preprocessing.preprocessing import load_artifacts, prepare_for_model, preprocess
 
     df = pd.read_csv(path)
     if "Churn" not in df.columns:

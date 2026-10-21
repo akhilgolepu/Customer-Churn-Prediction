@@ -88,7 +88,7 @@ Packaging and runtime
     or `isinstance` check on one copy would miss the other. Found by mypy, which also flagged ORM
     timestamp columns typed as `str`.
 14. **The retraining job wrote into the repository** (`catboost_info/` in the working directory, models
-    and bundles under `model/artifacts/`). `RETRAINING_OUTPUT_DIR` redirects them; CatBoost no longer
+    and bundles under `models/`). `RETRAINING_OUTPUT_DIR` redirects them; CatBoost no longer
     writes training logs.
 
 Test and tooling hygiene
@@ -99,3 +99,41 @@ Test and tooling hygiene
     every generated report was byte-identical under both versions.
 17. My own `tasks.py loadtest` left uvicorn's worker processes running on Windows (`terminate()`
     stops only the parent); it now stops the whole process tree.
+
+## Packaging and audit pass (2026-10-20)
+
+1. **The dashboard header showed numbers nobody measured**: "Validation: AUC 0.84 / F1 0.73" and
+   "Last trained: Mar 2026" were hard-coded in `Dashboard.tsx`; no command in the repo produces that
+   F1 (it depends on a threshold that is not stated). It now shows the measured test ROC-AUC (0.846).
+   [`test_dashboard_states_the_measured_test_auc`]
+2. **The README quoted "2.97% decision disagreement in the load test"**, which no committed output
+   backs. Replaced with the offline 3.4% from `reports/evaluation/evaluation.json` and the live metric's name; the
+   load-test CSVs behind the throughput numbers are now committed in `reports/loadtest/`.
+   [`test_load_numbers_match_the_committed_locust_csvs`]
+3. **`dvc.lock` was stale on `main`**: Tier 3 edited pipeline dependencies (`common.py`,
+   `dataset_registry.py`, the dataset catalog) without re-running DVC, so `dvc status` reported every
+   stage as changed. `dvc repro` re-ran in 5 min 12 s; every report, the threshold analysis and the
+   golden predictions came out byte-identical, and the model differs only in CatBoost's random
+   `model_guid`. The README's "reproduce byte for byte" was too strong for the `.cbm` file and is
+   reworded.
+4. **The README said the whole suite passed on Postgres**, but CI has no dataset and skips the
+   full-dataset check there too. The counts now say what CI reports.
+5. **Three requirement files could drift** (and a fourth, `requirements-mlops.txt`, was unpinned and
+   unused). Replaced by one pinned `requirements.txt` of direct dependencies, cut from a 232-line
+   environment freeze that included unused packages (Celery, Litestar, Flask, Graphene).
+   [`test_every_imported_package_is_declared`]
+6. `docker-compose.yml` hard-coded `ALLOWED_ORIGINS`, so the frontend could not be opened on any origin
+   other than `http://localhost:5173`; it is now overridable, with the same default.
+7. **`verify_deployment.py` crashed on a cold start instead of reporting it**: it only caught HTTP
+   errors, so when the sleeping Render instance took longer than the 90 s timeout to answer it died
+   with a `TimeoutError` traceback. Timeouts and refused connections are now FAIL lines, and the
+   health check is retried for up to `--wake` seconds (default 180) while the instance wakes.
+   [`test_verify_deployment.py`]
+8. **The image scan failed on a certifi advisory published the day before** (GHSA-6q48-6c7w-9gw2,
+   CRITICAL). The application's certifi was already fixed; the flagged copy was the one pip vendors,
+   found through the SBOM pip ships. The image now uninstalls pip after installing dependencies (the
+   API never needs it), which also removed the setuptools and urllib3 HIGH findings.
+9. Widening Bandit to `ml/` found a bare `except Exception: pass` around MLflow model registration,
+   which would also have hidden an unreachable tracking store. It now ignores only
+   `RESOURCE_ALREADY_EXISTS`.
+

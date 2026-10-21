@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
 
     model_path: str = str(
-        Path(__file__).resolve().parents[2] / "model" / "artifacts" / "catboost_churn.cbm"
+        Path(__file__).resolve().parents[2] / "models" / "catboost_churn.cbm"
     )
 
     secret_key: str = "change-me-in-production"
@@ -82,8 +82,8 @@ class Settings(BaseSettings):
 
     # Default decision threshold applied when a request does not pass ?threshold=.
     # 0.38 is the net-benefit optimum on out-of-fold calibrated validation scores
-    # under the primary cost scenario in model/training/threshold_analysis.py
-    # (docs/threshold_analysis.json); the closed-form break-even is 0.371. The
+    # under the primary cost scenario in ml/training/threshold_analysis.py
+    # (reports/evaluation/threshold_analysis.json); the closed-form break-even is 0.371. The
     # served score is a calibrated probability. Keep params.yaml
     # evaluation.decision_threshold equal to this (enforced by a test).
     decision_threshold: float = Field(default=0.38, ge=0.0, le=1.0)
@@ -102,12 +102,12 @@ class Settings(BaseSettings):
     promotion_min_f1: float = 0.45
     promotion_max_auc_drop: float = 0.02
 
-    # Standing challenger: a logistic-regression model (model/linear_model.py)
+    # Standing challenger: a logistic-regression model (ml/linear_model.py)
     # kept in the shadow slot whenever no other candidate is being tested. It is
     # scored on every request; with CANARY_ENABLED it also serves that share of
     # traffic. Relative paths resolve against the repository root.
     challenger_enabled: bool = True
-    challenger_artifact_path: str = "model/artifacts/logreg_challenger.json"
+    challenger_artifact_path: str = "models/logreg_challenger.json"
     challenger_version: str = "logreg-challenger"
 
     # GET /metrics (Prometheus). Public unless METRICS_TOKEN is set, then it needs

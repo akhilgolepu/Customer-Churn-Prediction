@@ -72,7 +72,7 @@ def _attach_challenger(model_registry_service: ModelRegistryService, settings) -
     path = Path(settings.challenger_artifact_path)
     resolved = path if path.is_absolute() else Path(__file__).resolve().parents[1] / path
     if not resolved.exists():
-        logger.warning("CHALLENGER_ENABLED but %s does not exist; run model/training/train.py", resolved)
+        logger.warning("CHALLENGER_ENABLED but %s does not exist; run ml/training/train.py", resolved)
         return
     try:
         metrics = json.loads(resolved.read_text(encoding="utf-8")).get("metrics", {})

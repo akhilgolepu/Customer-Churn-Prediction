@@ -1,20 +1,20 @@
 schema: '2.0'
 stages:
   validate_data:
-    cmd: python model/training/validate_data.py
+    cmd: python ml/training/validate_data.py
     deps:
     - path: data/Telco-Customer-Churn.csv
       hash: md5
       md5: 0f9de68e012bd3aed5fa7cdc9fc421af
       size: 977501
-    - path: model/data_schema.py
+    - path: ml/data_schema.py
       hash: md5
-      md5: 5dbdf91be5746ed2e1a62d062165423a
-      size: 6422
-    - path: model/training/validate_data.py
+      md5: 2a1c7845197a04afe990459d00e7efbf
+      size: 6564
+    - path: ml/training/validate_data.py
       hash: md5
-      md5: 21d715c99a877f447e6ac493cfc034a2
-      size: 1995
+      md5: b1a182e71a1eb52a80969471da9f62ef
+      size: 2043
     params:
       params.yaml:
         data:
@@ -30,44 +30,44 @@ stages:
       md5: ddc5caa9f621d0acb67a45506c171686
       size: 238
   train:
-    cmd: python model/training/train.py
+    cmd: python ml/training/train.py
     deps:
     - path: data/Telco-Customer-Churn.csv
       hash: md5
       md5: 0f9de68e012bd3aed5fa7cdc9fc421af
       size: 977501
-    - path: model/artifacts/cat_columns.json
+    - path: ml/calibration.py
+      hash: md5
+      md5: d38fdf4189ca6d9a08b7bfd02bb74afb
+      size: 4238
+    - path: ml/linear_model.py
+      hash: md5
+      md5: f6e00d84c85c3f182da9fd8ae4fbe164
+      size: 5076
+    - path: ml/preprocessing/preprocessing.py
+      hash: md5
+      md5: e229a1680dcf80e5e1044056c95cb30f
+      size: 7317
+    - path: ml/tracking.py
+      hash: md5
+      md5: e02c495b335ef468bc004b3bf2922c55
+      size: 3602
+    - path: ml/training/common.py
+      hash: md5
+      md5: b9554c3ee6428cc9fe61cf8c317ef2fb
+      size: 10440
+    - path: ml/training/train.py
+      hash: md5
+      md5: 02d16c7cf826c214821adfdd39eccba2
+      size: 7855
+    - path: models/cat_columns.json
       hash: md5
       md5: de51ff60e353090fba195a982327b592
       size: 322
-    - path: model/artifacts/feature_list.json
+    - path: models/feature_list.json
       hash: md5
       md5: fd053ac30812bc00e4076cb0e670c5bd
       size: 542
-    - path: model/calibration.py
-      hash: md5
-      md5: 1d2de336c654fdace783fbb8e6d99c54
-      size: 4131
-    - path: model/linear_model.py
-      hash: md5
-      md5: fe492c055de95c812b60776ada21d81e
-      size: 4964
-    - path: model/preprocessing/preprocessing.py
-      hash: md5
-      md5: 1605756618ac280cb8f6cf32020920e9
-      size: 7333
-    - path: model/tracking.py
-      hash: md5
-      md5: 268c2468040b9c9623101032206d6d29
-      size: 3520
-    - path: model/training/common.py
-      hash: md5
-      md5: 1517599ab69049e6f101039cce3019ee
-      size: 10162
-    - path: model/training/train.py
-      hash: md5
-      md5: e253dde6e8d1188df1208e8ba19f56f5
-      size: 7682
     - path: reports/data_validation.json
       hash: md5
       md5: ddc5caa9f621d0acb67a45506c171686
@@ -115,63 +115,63 @@ stages:
             C: 1.0
             max_iter: 2000
         output:
-          model_path: model/artifacts/catboost_churn.cbm
-          calibration_path: model/artifacts/catboost_churn.calibration.json
-          challenger_path: model/artifacts/logreg_challenger.json
-          training_metadata_path: model/artifacts/training_metadata.json
-          metrics_path: metrics.json
+          model_path: models/catboost_churn.cbm
+          calibration_path: models/catboost_churn.calibration.json
+          challenger_path: models/logreg_challenger.json
+          training_metadata_path: models/training_metadata.json
+          metrics_path: reports/metrics.json
         split:
           test_size: 0.2
           val_size: 0.2
           seed: 42
     outs:
-    - path: model/artifacts/catboost_churn.calibration.json
+    - path: models/catboost_churn.calibration.json
       hash: md5
       md5: d03922ec6897f34eda75bea689442487
       size: 81
-    - path: model/artifacts/catboost_churn.cbm
+    - path: models/catboost_churn.cbm
       hash: md5
-      md5: 88158cda020be54015afded170a443c5
+      md5: 198d4cbe69ebe9598f3ac6fca874474a
       size: 147660
-    - path: model/artifacts/logreg_challenger.calibration.json
+    - path: models/logreg_challenger.calibration.json
       hash: md5
       md5: d03922ec6897f34eda75bea689442487
       size: 81
-    - path: model/artifacts/logreg_challenger.json
+    - path: models/logreg_challenger.json
       hash: md5
       md5: 1a729f3729de97c14a793e8e0c79ce80
       size: 6149
-    - path: model/artifacts/training_metadata.json
+    - path: models/training_metadata.json
       hash: md5
-      md5: 4c92c9ff8a8cae606d3f53edb2dbf872
-      size: 3166
+      md5: e0c0933d8b7bc342de577eb6e020363c
+      size: 3157
   evaluate:
-    cmd: python model/training/evaluate.py
+    cmd: python ml/training/evaluate.py
     deps:
     - path: data/Telco-Customer-Churn.csv
       hash: md5
       md5: 0f9de68e012bd3aed5fa7cdc9fc421af
       size: 977501
-    - path: model/artifacts/catboost_churn.calibration.json
+    - path: ml/training/common.py
+      hash: md5
+      md5: b9554c3ee6428cc9fe61cf8c317ef2fb
+      size: 10440
+    - path: ml/training/evaluate.py
+      hash: md5
+      md5: 4a28bdf2d1bfb8b97aed124eb0337c59
+      size: 20786
+    - path: models/catboost_churn.calibration.json
       hash: md5
       md5: d03922ec6897f34eda75bea689442487
       size: 81
-    - path: model/artifacts/catboost_churn.cbm
+    - path: models/catboost_churn.cbm
       hash: md5
-      md5: 88158cda020be54015afded170a443c5
+      md5: 198d4cbe69ebe9598f3ac6fca874474a
       size: 147660
-    - path: model/artifacts/logreg_challenger.json
+    - path: models/logreg_challenger.json
       hash: md5
       md5: 1a729f3729de97c14a793e8e0c79ce80
       size: 6149
-    - path: model/training/common.py
-      hash: md5
-      md5: 1517599ab69049e6f101039cce3019ee
-      size: 10162
-    - path: model/training/evaluate.py
-      hash: md5
-      md5: e3423d73af9d2ae8d123c527b41aee9c
-      size: 20215
     params:
       params.yaml:
         bootstrap:
@@ -219,45 +219,45 @@ stages:
           max_calibration_gap: 0.05
           max_recall_gap: 0.15
     outs:
-    - path: docs/evaluation.json
+    - path: reports/evaluation/evaluation.json
       hash: md5
       md5: 4fce93c58dc54a9de309d9bcb9172aa4
       size: 25191
-    - path: docs/model_comparison.md
+    - path: reports/evaluation/model_comparison.md
       hash: md5
-      md5: ff5a4c655e39d409cbffa129e0cd8ea0
-      size: 4517
-    - path: docs/reliability_diagram.png
+      md5: e6c7a02bfab1d4f1c4c6138cedf898ad
+      size: 4514
+    - path: reports/evaluation/reliability_diagram.png
       hash: md5
       md5: a86471f8823809456efc4476fd70c492
       size: 116054
-    - path: docs/slice_metrics.md
+    - path: reports/evaluation/slice_metrics.md
       hash: md5
-      md5: 160d808ed2d793be7026be65d5305bc7
-      size: 2604
-    - path: metrics.json
+      md5: f9cb487b9d1990d0d010bba99fef88e2
+      size: 2601
+    - path: reports/metrics.json
       hash: md5
       md5: 87a553c8d85e1567adad08d19ceca711
       size: 477
   threshold_analysis:
-    cmd: python model/training/threshold_analysis.py
+    cmd: python ml/training/threshold_analysis.py
     deps:
     - path: data/Telco-Customer-Churn.csv
       hash: md5
       md5: 0f9de68e012bd3aed5fa7cdc9fc421af
       size: 977501
-    - path: model/artifacts/catboost_churn.calibration.json
+    - path: ml/training/threshold_analysis.py
+      hash: md5
+      md5: bdb977464530bb90909a9ef91549badf
+      size: 9585
+    - path: models/catboost_churn.calibration.json
       hash: md5
       md5: d03922ec6897f34eda75bea689442487
       size: 81
-    - path: model/artifacts/catboost_churn.cbm
+    - path: models/catboost_churn.cbm
       hash: md5
-      md5: 88158cda020be54015afded170a443c5
+      md5: 198d4cbe69ebe9598f3ac6fca874474a
       size: 147660
-    - path: model/training/threshold_analysis.py
-      hash: md5
-      md5: f2ea339715ad89ca4ea614c11d2ef36d
-      size: 9362
     params:
       params.yaml:
         bootstrap:
@@ -296,12 +296,12 @@ stages:
           - 0.3
           - 0.5
     outs:
-    - path: docs/threshold_analysis.json
+    - path: reports/evaluation/threshold_analysis.json
       hash: md5
       md5: e7e7b212956871ec5b8690072cafbd2b
       size: 10155
   dataset_report:
-    cmd: python model/training/build_dataset_report.py
+    cmd: python ml/training/build_dataset_report.py
     deps:
     - path: data/Telco-Customer-Churn.csv
       hash: md5
@@ -309,42 +309,42 @@ stages:
       size: 977501
     - path: data/dataset_catalog.json
       hash: md5
-      md5: 57b20ba880c9dd2fa6f88e6712957bce
-      size: 1170
-    - path: model/training/build_dataset_report.py
+      md5: 405122a485312d2e2033476c8f145815
+      size: 1477
+    - path: ml/training/build_dataset_report.py
       hash: md5
       md5: 2258fe66e7c246372fbb9f6fcc741394
       size: 2258
-    - path: model/training/dataset_registry.py
+    - path: ml/training/dataset_registry.py
       hash: md5
-      md5: edee638a492f18a3b19e032de5b6198f
-      size: 3700
+      md5: bdaa7ccb6bc3d465ff75148a35e18090
+      size: 3797
     outs:
     - path: data/dataset_report.md
       hash: md5
-      md5: 8a31cc0688e0003b9fcb5fa073dd3788
-      size: 864
+      md5: 68de30f28827451a7f2b5d7ebf60e835
+      size: 1013
   ci_golden:
-    cmd: python scripts/make_ci_sample.py --golden
+    cmd: python scripts/ci/make_ci_sample.py --golden
     deps:
     - path: data/ci_sample.csv
       hash: md5
       md5: 46fc33763a31044d8d10ac1539511af9
       size: 68032
-    - path: model/artifacts/catboost_churn.calibration.json
+    - path: models/catboost_churn.calibration.json
       hash: md5
       md5: d03922ec6897f34eda75bea689442487
       size: 81
-    - path: model/artifacts/catboost_churn.cbm
+    - path: models/catboost_churn.cbm
       hash: md5
-      md5: 88158cda020be54015afded170a443c5
+      md5: 198d4cbe69ebe9598f3ac6fca874474a
       size: 147660
-    - path: scripts/make_ci_sample.py
+    - path: scripts/ci/make_ci_sample.py
       hash: md5
-      md5: b51019d2673d34c8c937132c62d63b83
-      size: 5605
+      md5: 98b17a91667c5726cb4dcc77b25b26ed
+      size: 5698
     outs:
     - path: data/ci_sample_golden.json
       hash: md5
-      md5: a3eb3b0edfcdfb5351c32524c2af5046
-      size: 8701
+      md5: 35a7cde1c9e856a41a589cc1a2d4e0e7
+      size: 8695

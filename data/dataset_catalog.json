@@ -20,7 +20,7 @@
       "task": "binary_classification",
       "domain": "banking",
       "status": "evaluated",
-      "notes": "Generalisation check only, not served: python model/training/second_dataset.py -> docs/second_dataset.md",
+      "notes": "Generalisation check only, not served: python ml/training/second_dataset.py -> reports/experiments/second_dataset.md",
       "source": "https://www.openml.org/d/46911 (original: kaggle.com/datasets/gauravtopre/bank-customer-churn-dataset)",
       "licence": "OpenML/TabArena: Public; Kaggle: Other (specified in description). Downloaded at run time, not committed."
     },

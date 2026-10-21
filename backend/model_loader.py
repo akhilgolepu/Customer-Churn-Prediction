@@ -10,8 +10,8 @@ from core.settings import get_settings
 from catboost import CatBoostClassifier
 import shap
 
-from model.calibration import Calibrator, load_for_model
-from model.linear_model import LinearChurnModel
+from ml.calibration import Calibrator, load_for_model
+from ml.linear_model import LinearChurnModel
 
 from storage.factory import build_object_storage
 
@@ -97,16 +97,18 @@ class ModelRuntimeManager:
 
     def _relocate(self, artifact_path: str, model_path: Path) -> Path:
         """An absolute path recorded on another machine (e.g. a registry seeded on Windows
-        and mounted into a Linux container): map ".../model/artifacts/<rest>" onto this
+        and mounted into a Linux container): map ".../models/<rest>" (or the older
+        ".../model/artifacts/<rest>") onto this
         checkout when that file exists. Otherwise return the path unchanged (and let
         the caller report it missing)."""
         normalized = artifact_path.replace("\\", "/")
-        marker = "/model/artifacts/"
-        if marker in normalized:
-            candidate = (_BASE_DIR / "model" / "artifacts" / normalized.split(marker, 1)[1]).resolve()
-            if candidate.exists():
-                logger.warning("Artifact %s not found; using %s from this checkout", artifact_path, candidate)
-                return candidate
+        # "/model/artifacts/" is the layout before artifacts moved to models/ (old registries).
+        for marker in ("/models/", "/model/artifacts/"):
+            if marker in normalized:
+                candidate = (_BASE_DIR / "models" / normalized.split(marker, 1)[1]).resolve()
+                if candidate.exists():
+                    logger.warning("Artifact %s not found; using %s from this checkout", artifact_path, candidate)
+                    return candidate
         return model_path
 
     def _cleanup_bundle_dir(self, bundle_dir: Path | None) -> None:
@@ -160,9 +162,9 @@ class ModelRuntimeManager:
 
     def _resolve_model_artifact(self, artifact_path: str) -> tuple[Path, Path | None]:
         if artifact_path.startswith(("models:/", "runs:/")):
-            # MLflow registry/run URI (model/tracking.py). Needs mlflow installed,
+            # MLflow registry/run URI (ml/tracking.py). Needs mlflow installed,
             # which the slim API image is not; use a file/s3 path there.
-            from model.tracking import download_model_dir
+            from ml.tracking import download_model_dir
 
             return download_model_dir(artifact_path)
         resolved_path = self._resolve_artifact(artifact_path)
@@ -174,7 +176,7 @@ class ModelRuntimeManager:
     def _load_model(self, model_path: Path):
         """Load a model artifact and its calibration.
 
-        .cbm -> CatBoost; .json -> logistic regression (model/linear_model.py).
+        .cbm -> CatBoost; .json -> logistic regression (ml/linear_model.py).
         A bundle keeps the calibration at model/calibration.json, a loose artifact
         next to it as <name>.calibration.json. Without one the raw score is served
         (identity), which is how pre-calibration artifacts behave."""

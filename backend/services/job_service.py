@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 
 from core.settings import get_settings
-from model.data_schema import validate_frame
+from ml.data_schema import validate_frame
 from repositories.job_repository import JobItem, JobRepository
 from schemas.prediction import PredictionRequest
 from storage.adapters import ObjectStorage, random_object_key
@@ -188,7 +188,7 @@ class JobService:
         missing_columns = sorted(required_columns - incoming_columns)
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
-        # Validate every row up front (pandera, model/data_schema.py) so a bad
+        # Validate every row up front (pandera, ml/data_schema.py) so a bad
         # file fails with the full list of problems, not the first bad row.
         errors = validate_frame(frame[list(PredictionRequest.model_fields.keys())])
         if errors:

@@ -10,7 +10,7 @@ flowchart LR
         T --> E[evaluate<br/>CV, bootstrap, slices]
         T --> TH[threshold_analysis<br/>cost-based, validation]
         T --> ML[(MLflow registry<br/>churn-catboost,<br/>churn-logreg-challenger)]
-        T --> ART[(model/artifacts<br/>.cbm / .json +<br/>calibration.json)]
+        T --> ART[(models/<br/>.cbm / .json +<br/>calibration.json)]
     end
 
     subgraph API["FastAPI service (Render, Docker)"]
@@ -70,7 +70,7 @@ sequenceDiagram
 
 | Step | Endpoint / code | Guard |
 |---|---|---|
-| Train | `dvc repro` (`model/training/train.py`) | data validation stage, test split never used for selection |
+| Train | `dvc repro` (`ml/training/train.py`) | data validation stage, test split never used for selection |
 | Register | `POST /api/v1/models/register` (file, s3, az or `models:/` path) | admin role |
 | Shadow / canary | `POST /api/v1/models/shadow` | disagreement-based automatic rollback ([ADR 0002](decisions/0002-canary-disagreement-over-compared-requests.md)) |
 | Promote | `POST /api/v1/models/promote` | promotion gate: 409 on blockers, audited override ([ADR 0005](decisions/0005-promotion-gate-fails-closed.md)) |
@@ -90,9 +90,12 @@ candidate is being tested ([ADR 0001](decisions/0001-catboost-active-logreg-chal
 | `backend/model_loader.py` | runtime: CatBoost and linear adapters, calibration, bundles, MLflow URIs |
 | `backend/core/prometheus.py` | `/metrics` |
 | `backend/db/alembic/` | Postgres migrations `0001` to `0004` |
-| `model/` | shared feature contract, calibration, linear model export, data schema, MLflow helpers |
-| `model/training/` | `train.py`, `evaluate.py`, `threshold_analysis.py`, `second_dataset.py`, `permutation_check.py` |
-| `scripts/` | demos (`demo_all.py`, rollback, drift), CI sample generator, deployment check |
+| `ml/` | shared feature contract, calibration, linear model export, data schema, MLflow helpers |
+| `models/` | trained artifacts the API serves (baked into the image) |
+| `ml/training/` | `train.py`, `evaluate.py`, `threshold_analysis.py`, `second_dataset.py`, `permutation_check.py` |
+| `scripts/` | `demos/` (`demo_all.py`, rollback, drift), `ci/` (golden sample), `deploy/` (deployment check) |
+| `reports/` | generated outputs: `evaluation/`, `experiments/`, `demos/`, `loadtest/` |
+| `tests/` | `api/`, `ml/`, `repo/` |
 | `observability/` | Prometheus config, Grafana provisioning and dashboard |
 
 ## How I would run this with real data

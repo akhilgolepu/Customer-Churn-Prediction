@@ -31,7 +31,7 @@ inflated tenfold and could exceed 100% (see the
 
 ## Consequences
 
-- Measured in the demos (`scripts/demo_shadow_rollback.py`, limit 20%, 60 minimum
+- Measured in the demos (`scripts/demos/demo_shadow_rollback.py`, limit 20%, 60 minimum
   samples): a healthy retrain disagreed on 2.2% of 400 requests and stayed; a candidate
   trained on permuted labels hit 33.3% and was rolled back after 60 requests, in-process,
   against the Docker container and on Postgres. The standing logistic-regression

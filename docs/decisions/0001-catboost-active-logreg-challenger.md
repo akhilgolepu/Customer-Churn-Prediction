@@ -4,7 +4,7 @@ Status: accepted (2026-10-18)
 
 ## Context
 
-The honest evaluation (`python model/training/evaluate.py`, [model_comparison.md](../model_comparison.md))
+The honest evaluation (`python ml/training/evaluate.py`, [model_comparison.md](../../reports/evaluation/model_comparison.md))
 shows that CatBoost does not beat logistic regression on this dataset:
 
 - 5-fold CV ROC-AUC 0.8476 (CatBoost) vs 0.8484 (logistic regression); paired bootstrap of the
@@ -21,7 +21,7 @@ regression; keep CatBoost active and run logistic regression continuously as a c
 ## Decision
 
 CatBoost remains the active model. A logistic-regression model trained on the same split
-(`model/artifacts/logreg_challenger.json`, written by `model/training/train.py`) is attached to the
+(`models/logreg_challenger.json`, written by `ml/training/train.py`) is attached to the
 shadow slot at API startup whenever no other candidate is being tested (`CHALLENGER_ENABLED=true`,
 default). It is scored on every request; the canary counter (`GET /api/v1/system/canary`) records how
 often the two disagree on live traffic.
@@ -53,7 +53,7 @@ often the two disagree on live traffic.
 
 ## Update: does the tie generalise? (second dataset)
 
-`python model/training/second_dataset.py` ([docs/second_dataset.md](../second_dataset.md))
+`python ml/training/second_dataset.py` ([reports/experiments/second_dataset.md](../../reports/experiments/second_dataset.md))
 runs the same pipeline on a bank churn dataset (OpenML 46911, 10,000 customers). There
 CatBoost beats logistic regression clearly: +0.109 ROC-AUC on pooled out-of-fold scores
 (95% CI +0.099 to +0.120). A logistic regression given the two non-linear shapes a tree

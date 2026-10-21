@@ -10,7 +10,7 @@ Suggested naming:
 After adding files, run:
 
 ```bash
-python model/training/build_dataset_report.py
+python ml/training/build_dataset_report.py
 ```
 
 This refreshes `data/dataset_report.md` and verifies which datasets are active and available.

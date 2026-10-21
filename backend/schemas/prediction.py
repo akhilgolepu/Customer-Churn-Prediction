@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from model.data_schema import consistency_errors
+from ml.data_schema import consistency_errors
 
 YesNo = Literal["Yes", "No"]
 YesNoPhone = Literal["Yes", "No", "No phone service"]
@@ -40,7 +40,7 @@ class PredictionRequest(BaseModel):
 
     @model_validator(mode="after")
     def _consistent_services(self):
-        # Same rule table as the pandera schemas (model/data_schema.py); plain
+        # Same rule table as the pandera schemas (ml/data_schema.py); plain
         # Python here because pandera adds ~24 ms per call.
         errors = consistency_errors(self.model_dump())
         if errors:

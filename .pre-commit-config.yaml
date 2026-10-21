@@ -1,4 +1,4 @@
-# Install once: pip install -r requirements-dev.txt && pre-commit install
+# Install once: pip install -r requirements.txt && pre-commit install
 # Hooks only check; none of them rewrites files (the repo keeps CRLF line endings).
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -14,7 +14,7 @@ repos:
     rev: v0.15.21
     hooks:
       - id: ruff-check
-        files: ^(backend|model|scripts)/
+        files: ^(backend|ml|scripts|tests)/
   - repo: local
     hooks:
       - id: mypy-backend
