@@ -65,10 +65,13 @@ def log_and_register(model_file: Path, registered_name: str, artifact_path: str 
     run = mlflow.active_run()
     if run is None:
         raise RuntimeError("log_and_register must be called inside tracking.start_run()")
+    from mlflow.exceptions import MlflowException
+
     try:
         client.create_registered_model(registered_name)
-    except Exception:  # already exists
-        pass
+    except MlflowException as exc:
+        if exc.error_code != "RESOURCE_ALREADY_EXISTS":  # anything else (e.g. store unreachable) is real
+            raise
     version = client.create_model_version(
         registered_name, source=f"{run.info.artifact_uri}/{artifact_path}", run_id=run.info.run_id
     )
