@@ -121,7 +121,7 @@ The full dataset passes the training schema. Malformed-row tests: `tests/ml/test
 |---|---|
 | Backend Checks | ruff, mypy (non-strict, `backend/`), validates the CI sample against the training schema, full test suite with coverage (summary in the job page, `coverage.xml` uploaded) |
 | Backend Tests on Postgres | same suite with `DATABASE_BACKEND=postgres` against a Postgres 16 service container (migrations run on startup) |
-| API Image Build, Smoke Test and Scan | builds the Docker image, starts it, calls health and `/predict`, scans with Trivy (fails on fixable CRITICAL, lists HIGH). Last scan (2026-10-20, single `requirements.txt`): 0 CRITICAL after upgrading mlflow to 3.15.0; 5 HIGH with fixes available, all in transitive Python packages (cryptography, setuptools, urllib3), none in OS packages |
+| API Image Build, Smoke Test and Scan | builds the Docker image, starts it, calls health and `/predict`, scans with Trivy (fails on fixable CRITICAL, lists HIGH). Last scan (2026-10-21): 0 CRITICAL, 1 HIGH (cryptography 49 to 50, a major upgrade, transitive). Getting there: mlflow upgraded to 3.15.0, python-multipart to 0.0.30, and pip uninstalled from the image after installing dependencies, which removed the certifi, setuptools and urllib3 copies pip vendors |
 | Frontend Checks | eslint, type-check and build |
 
 Plus `security.yml` (Bandit, pip-audit, CodeQL, Gitleaks), Dependabot (`.github/dependabot.yml`: pip,

@@ -141,9 +141,9 @@ Deployment, API reference and configuration: [docs/deployment.md](docs/deploymen
   are assumptions, and only a randomised holdout campaign could measure them.
 - **The canary measures divergence, not correctness.** A better model also disagrees; deciding which
   is better needs labelled outcomes ([ADR 0002](docs/decisions/0002-canary-disagreement-over-compared-requests.md)).
-- **Five HIGH vulnerabilities remain in the image** (transitive: cryptography, setuptools,
-  urllib3; fixes exist, 0 CRITICAL), and the image is 3.22 GB because it installs the full
-  dependency set ([docs/mlops.md](docs/mlops.md#ci)).
+- **One HIGH vulnerability remains in the image** (cryptography, pulled in transitively; the
+  fix is a major upgrade, 49 to 50), 0 CRITICAL. The image is 3.22 GB because it installs the
+  full dependency set ([docs/mlops.md](docs/mlops.md#ci)).
 - **Retraining uses a simpler recipe** than `train.py` (no calibration file, a different pre-check);
   moving it onto the DVC pipeline is the next step.
 
@@ -151,7 +151,7 @@ Deployment, API reference and configuration: [docs/deployment.md](docs/deploymen
 <summary>Resume bullets and interview questions</summary>
 
 Resume bullets with the command behind each number, likely interview questions with short answers,
-and the bugs worth talking about: [docs/interview_notes.md](docs/interview_notes.md). All 33 issues
+and the bugs worth talking about: [docs/interview_notes.md](docs/interview_notes.md). All 35 issues
 found while hardening the project: [docs/engineering_log.md](docs/engineering_log.md).
 
 </details>

@@ -84,7 +84,7 @@ what a multi-worker setup needs.
 ## Selected bugs
 
 Every bug found while hardening the project is fixed, has a regression test where code changed, and
-is written up in [docs/engineering_log.md](engineering_log.md) (33 entries). Four that say the
+is written up in [docs/engineering_log.md](engineering_log.md) (35 entries). Four that say the
 most about the project:
 
 - **The original model was evaluated on its own early-stopping data.** Its tree count was chosen on

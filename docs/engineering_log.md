@@ -129,4 +129,11 @@ Test and tooling hygiene
    with a `TimeoutError` traceback. Timeouts and refused connections are now FAIL lines, and the
    health check is retried for up to `--wake` seconds (default 180) while the instance wakes.
    [`test_verify_deployment.py`]
+8. **The image scan failed on a certifi advisory published the day before** (GHSA-6q48-6c7w-9gw2,
+   CRITICAL). The application's certifi was already fixed; the flagged copy was the one pip vendors,
+   found through the SBOM pip ships. The image now uninstalls pip after installing dependencies (the
+   API never needs it), which also removed the setuptools and urllib3 HIGH findings.
+9. Widening Bandit to `ml/` found a bare `except Exception: pass` around MLflow model registration,
+   which would also have hidden an unreachable tracking store. It now ignores only
+   `RESOURCE_ALREADY_EXISTS`.
 
