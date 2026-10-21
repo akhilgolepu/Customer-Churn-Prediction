@@ -124,4 +124,9 @@ Test and tooling hygiene
    [`test_every_imported_package_is_declared`]
 6. `docker-compose.yml` hard-coded `ALLOWED_ORIGINS`, so the frontend could not be opened on any origin
    other than `http://localhost:5173`; it is now overridable, with the same default.
+7. **`verify_deployment.py` crashed on a cold start instead of reporting it**: it only caught HTTP
+   errors, so when the sleeping Render instance took longer than the 90 s timeout to answer it died
+   with a `TimeoutError` traceback. Timeouts and refused connections are now FAIL lines, and the
+   health check is retried for up to `--wake` seconds (default 180) while the instance wakes.
+   [`test_verify_deployment.py`]
 

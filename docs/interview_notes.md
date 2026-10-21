@@ -20,7 +20,7 @@ checks them against the generated outputs.
   canary after 60 requests at 33.3% disagreement, while a healthy retrain (2.2%) is promoted.
   `python scripts/demo_all.py`
 - **Made an untested Postgres mode work and kept it working.** Six defects fixed (one made every
-  prediction fail after March 2026); the full suite (197 tests) runs on SQLite and Postgres in CI, and golden
+  prediction fail after March 2026); the full suite (200 tests) runs on SQLite and Postgres in CI, and golden
   predictions on a committed 500-row sample pin the real model's output to 1e-6.
   `pytest backend/tests` (and with `DATABASE_BACKEND=postgres`)
 - **Measured capacity instead of quoting a load generator's ceiling.** About 290 req/s with 2
@@ -84,7 +84,7 @@ what a multi-worker setup needs.
 ## Selected bugs
 
 Every bug found while hardening the project is fixed, has a regression test where code changed, and
-is written up in [docs/engineering_log.md](engineering_log.md) (32 entries). Four that say the
+is written up in [docs/engineering_log.md](engineering_log.md) (33 entries). Four that say the
 most about the project:
 
 - **The original model was evaluated on its own early-stopping data.** Its tree count was chosen on

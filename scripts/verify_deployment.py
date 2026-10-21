@@ -12,8 +12,9 @@ Checks, in order, and exits non-zero on the first failure:
   6. POST /api/v1/predictions/explain      returns SHAP drivers
   7. GET  /api/v1/predictions/history      authenticated route works
 
-Free Render instances sleep when idle, so the first request can take 30-60 s;
-use --timeout to allow for it.
+Free Render instances sleep when idle and can take a minute or more to wake, so the
+health check is retried for up to --wake seconds (default 180) before it fails; every
+other request uses --timeout. A timeout or refused connection is reported as FAIL.
 """
 
 from __future__ import annotations
@@ -48,6 +49,9 @@ def call(method, url, body=None, headers=None, timeout=90):
             return resp.status, dict(resp.headers), parsed, time.perf_counter() - started
     except urllib.error.HTTPError as exc:
         return exc.code, dict(exc.headers), exc.read().decode()[:300], time.perf_counter() - started
+    except (urllib.error.URLError, OSError) as exc:  # timeout, refused or reset connection, DNS
+        reason = getattr(exc, "reason", exc)
+        return None, {}, f"{type(reason).__name__}: {reason}", time.perf_counter() - started
 
 
 def main() -> int:
@@ -56,7 +60,8 @@ def main() -> int:
     ap.add_argument("--origin", help="Frontend origin to test CORS for, e.g. https://your-app.vercel.app")
     ap.add_argument("--user", default="viewer")
     ap.add_argument("--password", default="viewer123")
-    ap.add_argument("--timeout", type=int, default=90)
+    ap.add_argument("--timeout", type=int, default=90, help="seconds per request")
+    ap.add_argument("--wake", type=int, default=180, help="seconds to keep retrying health while the instance wakes")
     args = ap.parse_args()
     base = args.base_url.rstrip("/")
     failures = 0
@@ -68,8 +73,18 @@ def main() -> int:
             failures += 1
         return ok
 
-    status, _, body, took = call("GET", f"{base}/api/v1/system/health", timeout=args.timeout)
-    if not check("health", status == 200, f"HTTP {status}, {took:.1f}s (includes any cold start)"):
+    deadline = time.monotonic() + args.wake
+    first = time.perf_counter()
+    while True:
+        remaining = deadline - time.monotonic()
+        status, _, body, _ = call("GET", f"{base}/api/v1/system/health", timeout=max(1, min(args.timeout, remaining)))
+        if status == 200 or time.monotonic() >= deadline:
+            break
+        print(f"  waiting for the instance to wake ({body if status is None else f'HTTP {status}'}) ...", flush=True)
+        time.sleep(min(5, max(0, deadline - time.monotonic())))
+    took = time.perf_counter() - first
+    detail = f"HTTP {status}" if status is not None else str(body)
+    if not check("health", status == 200, f"{detail}, {took:.1f}s (includes any cold start)"):
         return 1
     status, _, body, took = call("GET", f"{base}/api/v1/system/ready", timeout=args.timeout)
     if not check("ready", status == 200, f"HTTP {status}, {body}"):

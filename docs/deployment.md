@@ -25,9 +25,10 @@ README said) leaves the model out of the build and the service fails to start.
    password.
 3. **Verify end to end** (stdlib only, no installs):
    ```bash
-   python scripts/verify_deployment.py https://<your-api>.onrender.com --origin https://<your-app>.vercel.app --password <viewer demo password> --timeout 120
+   python scripts/verify_deployment.py https://<your-api>.onrender.com --origin https://<your-app>.vercel.app --password <viewer demo password>
    ```
-   It checks health, readiness, CORS preflight for your frontend origin, login, predict, explain and an
+   It retries the health check for up to 3 minutes while a sleeping free instance wakes (`--wake`),
+   then checks readiness, CORS preflight for your frontend origin, login, predict, explain and an
    authenticated route, and exits non-zero on the first failure. Last run against the live demo: 7/7 as analyst and as viewer
    on 2026-10-20.
 

@@ -104,7 +104,7 @@ behind each choice: [docs/decisions/](docs/decisions/).
 | Component | Status | Evidence |
 |---|---|---|
 | Live deployment (Render + Vercel) | Verified | `scripts/verify_deployment.py`: 7/7 checks as analyst and viewer on 2026-10-20 |
-| Test suite, SQLite | Verified | 197 tests locally (196 + 1 skipped in CI, which has no dataset); CI job "Backend Checks" ([docs/mlops.md](docs/mlops.md#ci)) |
+| Test suite, SQLite | Verified | 200 tests locally (199 + 1 skipped in CI, which has no dataset); CI job "Backend Checks" ([docs/mlops.md](docs/mlops.md#ci)) |
 | Test suite, Postgres 16 | Verified | Same suite, CI job "Backend Tests on Postgres" and locally against the compose Postgres |
 | Golden predictions of the served model | Verified | 500-row synthetic sample pinned to 1e-6 (`backend/tests/test_ci_sample.py`) |
 | Promotion gate, canary rollback, drift alert | Verified | `python tasks.py demo`, [transcript](docs/demo_all.md) |
@@ -151,7 +151,7 @@ Deployment, API reference and configuration: [docs/deployment.md](docs/deploymen
 <summary>Resume bullets and interview questions</summary>
 
 Resume bullets with the command behind each number, likely interview questions with short answers,
-and the bugs worth talking about: [docs/interview_notes.md](docs/interview_notes.md). All 32 issues
+and the bugs worth talking about: [docs/interview_notes.md](docs/interview_notes.md). All 33 issues
 found while hardening the project: [docs/engineering_log.md](docs/engineering_log.md).
 
 </details>
@@ -169,3 +169,7 @@ loadtest/         Locust scenario      observability/   Prometheus + Grafana pro
 notebooks/        exploratory notebook reports/         DVC metrics and data-validation report
 dvc.yaml, params.yaml   pipeline and its settings      tasks.py, Makefile   task runner
 ```
+
+## Licence
+
+[MIT](LICENSE).
